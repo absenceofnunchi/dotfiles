@@ -105,17 +105,14 @@ end
 -- Optional: Shared on_attach that can be extended
 M.on_attach = function(client, bufnr)
     M.setup_keymaps(bufnr)
-    print(string.format("LSP '%s' attached to buffer %d", client.name, bufnr))
 end
 
--- Optional: Helper to merge custom on_attach with shared setup
 M.make_on_attach = function(custom_fn)
     return function(client, bufnr)
         M.setup_keymaps(bufnr)
         if custom_fn then
             custom_fn(client, bufnr)
         end
-        print(string.format("LSP '%s' attached to buffer %d", client.name, bufnr))
     end
 end
 
