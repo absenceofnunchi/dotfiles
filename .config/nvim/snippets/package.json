@@ -1,0 +1,8 @@
+{
+  "name": "user-snippets",
+  "contributes": {
+    "snippets": [
+      { "language": "swift", "path": "./swift.json" }
+    ]
+  }
+}

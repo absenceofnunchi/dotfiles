@@ -1,5 +1,7 @@
 return {
     "nvim-treesitter/nvim-treesitter",
+    branch = "master",
+    build = ":TSUpdate",
     config = function()
         require("nvim-treesitter.configs").setup({
             ensure_installed = {
@@ -12,14 +14,13 @@ return {
                 additional_vim_regex_highlighting = false,
                 disable = {},
             },
-            autotag = { enable = true },
             incremental_selection = {
                 enable = true,
                 keymaps = {
                     init_selection = "gnn",
-                    node_incremental = "grn",
-                    scope_incremental = "grc",
-                    node_decremental = "grm",
+                    node_incremental = "gnr",
+                    scope_incremental = "gnc",
+                    node_decremental = "gnm",
                 },
             },
             indent = { enable = true },

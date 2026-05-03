@@ -100,16 +100,42 @@ M.setup_keymaps = function(bufnr)
     vim.keymap.set('n', ']d', vim.diagnostic.goto_next, opts)
     vim.keymap.set('n', '<leader>d', vim.diagnostic.open_float, opts)
     vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, opts)
+
+    -- Inlay hint toggle (handles both 0.10 and 0.10.1+ APIs)
+    vim.keymap.set('n', '<leader>ih', function()
+        if not vim.lsp.inlay_hint then return end
+        local ok, enabled = pcall(vim.lsp.inlay_hint.is_enabled, { bufnr = bufnr })
+        if not ok then
+            -- Older 0.10 signature: is_enabled(bufnr)
+            ok, enabled = pcall(vim.lsp.inlay_hint.is_enabled, bufnr)
+        end
+        local target = not enabled
+        if not pcall(vim.lsp.inlay_hint.enable, target, { bufnr = bufnr }) then
+            pcall(vim.lsp.inlay_hint.enable, bufnr, target)
+        end
+    end, opts)
+end
+
+local function maybe_enable_inlay_hints(client, bufnr)
+    if not vim.lsp.inlay_hint then return end
+    if not (client.server_capabilities and client.server_capabilities.inlayHintProvider) then
+        return
+    end
+    if not pcall(vim.lsp.inlay_hint.enable, true, { bufnr = bufnr }) then
+        pcall(vim.lsp.inlay_hint.enable, bufnr, true)
+    end
 end
 
 -- Optional: Shared on_attach that can be extended
 M.on_attach = function(client, bufnr)
     M.setup_keymaps(bufnr)
+    maybe_enable_inlay_hints(client, bufnr)
 end
 
 M.make_on_attach = function(custom_fn)
     return function(client, bufnr)
         M.setup_keymaps(bufnr)
+        maybe_enable_inlay_hints(client, bufnr)
         if custom_fn then
             custom_fn(client, bufnr)
         end
