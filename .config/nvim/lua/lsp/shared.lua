@@ -9,7 +9,7 @@ M.path = {}
 
 -- Check if a file or directory exists
 M.path.exists = function(filepath)
-    local stat = vim.loop.fs_stat(filepath)
+    local stat = vim.uv.fs_stat(filepath)
     return stat ~= nil
 end
 
@@ -71,49 +71,36 @@ end
 
 -- Shared keymaps
 M.setup_keymaps = function(bufnr)
-    local opns = { noremap = true, silent = true, buffer = bufnr }
+    local function map(mode, lhs, rhs, desc)
+        vim.keymap.set(mode, lhs, rhs, { noremap = true, silent = true, buffer = bufnr, desc = desc })
+    end
 
     -- Navigation
-    -- vim.keymap.set('n', 'gd', vim.lsp.buf.definition, opts)
-    vim.keymap.set("n", "gd", lsp_definition_and_close_list, { desc = "Go to definition (close list)" })
-    vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, opts)
-    vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, opts)
-    vim.keymap.set('n', 'gr', vim.lsp.buf.references, opts)
-    vim.keymap.set('n', 'gt', vim.lsp.buf.type_definition, opts)
+    map("n", "gd", lsp_definition_and_close_list, "Go to definition (close list)")
+    map("n", "gD", vim.lsp.buf.declaration, "Go to declaration")
+    map("n", "gi", vim.lsp.buf.implementation, "Go to implementation")
+    map("n", "gr", vim.lsp.buf.references, "Find references")
+    map("n", "gt", vim.lsp.buf.type_definition, "Go to type definition")
 
     -- Hover and signatures
-    vim.keymap.set('n', 'gh', vim.lsp.buf.hover, opts)
-    vim.keymap.set('n', 'gs', vim.lsp.buf.signature_help, opts)
+    map("n", "gh", vim.lsp.buf.hover, "Hover")
+    map("n", "gs", vim.lsp.buf.signature_help, "Signature help")
 
     -- Code actions
-    vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, opts)
-    vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, opts)
-    vim.keymap.set('v', '<leader>ca', vim.lsp.buf.code_action, opts)
+    map("n", "<leader>rn", vim.lsp.buf.rename, "Rename symbol")
+    map({ "n", "v" }, "<leader>ca", vim.lsp.buf.code_action, "Code action")
 
-    -- Formatting
-    vim.keymap.set('n', '<leader>f', function()
-        vim.lsp.buf.format({ async = true })
-    end, opts)
+    -- Diagnostics. Formatting is owned by conform.nvim (with lsp_fallback).
+    map("n", "[d", function() vim.diagnostic.jump({ count = -1, float = true }) end, "Prev diagnostic")
+    map("n", "]d", function() vim.diagnostic.jump({ count = 1, float = true }) end, "Next diagnostic")
+    map("n", "<leader>d", vim.diagnostic.open_float, "Line diagnostics")
+    map("n", "<leader>q", vim.diagnostic.setloclist, "Diagnostics to loclist")
 
-    -- Diagnostics
-    vim.keymap.set('n', '[d', vim.diagnostic.goto_prev, opts)
-    vim.keymap.set('n', ']d', vim.diagnostic.goto_next, opts)
-    vim.keymap.set('n', '<leader>d', vim.diagnostic.open_float, opts)
-    vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, opts)
-
-    -- Inlay hint toggle (handles both 0.10 and 0.10.1+ APIs)
-    vim.keymap.set('n', '<leader>ih', function()
+    map("n", "<leader>ih", function()
         if not vim.lsp.inlay_hint then return end
-        local ok, enabled = pcall(vim.lsp.inlay_hint.is_enabled, { bufnr = bufnr })
-        if not ok then
-            -- Older 0.10 signature: is_enabled(bufnr)
-            ok, enabled = pcall(vim.lsp.inlay_hint.is_enabled, bufnr)
-        end
-        local target = not enabled
-        if not pcall(vim.lsp.inlay_hint.enable, target, { bufnr = bufnr }) then
-            pcall(vim.lsp.inlay_hint.enable, bufnr, target)
-        end
-    end, opts)
+        local enabled = vim.lsp.inlay_hint.is_enabled({ bufnr = bufnr })
+        vim.lsp.inlay_hint.enable(not enabled, { bufnr = bufnr })
+    end, "Toggle inlay hints")
 end
 
 local function maybe_enable_inlay_hints(client, bufnr)
@@ -121,9 +108,7 @@ local function maybe_enable_inlay_hints(client, bufnr)
     if not (client.server_capabilities and client.server_capabilities.inlayHintProvider) then
         return
     end
-    if not pcall(vim.lsp.inlay_hint.enable, true, { bufnr = bufnr }) then
-        pcall(vim.lsp.inlay_hint.enable, bufnr, true)
-    end
+    vim.lsp.inlay_hint.enable(true, { bufnr = bufnr })
 end
 
 -- Optional: Shared on_attach that can be extended

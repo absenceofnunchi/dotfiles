@@ -1,4 +1,33 @@
 return {
+    -- {
+    --     "nyoom-engineering/oxocarbon.nvim",
+    --     priority = 1000,
+    --     config = function()
+    --         vim.opt.background = "dark"
+    --         vim.cmd.colorscheme("oxocarbon")
+    --         vim.api.nvim_set_hl(0, "Normal", { bg = "none" })
+    --         vim.api.nvim_set_hl(0, "NormalNC", { bg = "none" })
+    --         vim.api.nvim_set_hl(0, "NormalFloat", { bg = "none" })
+    --         vim.api.nvim_set_hl(0, "NvimTreeNormal", { bg = "none" })
+    --         vim.api.nvim_set_hl(0, "NvimTreeNormalNC", { bg = "none" })
+    --         vim.api.nvim_set_hl(0, "NvimTreeEndOfBuffer", { bg = "none" })
+    --         vim.api.nvim_set_hl(0, "NvimTreeWinSeparator", { bg = "none" })
+    --         vim.api.nvim_set_hl(0, "IblIndent", { bg = "none" })
+    --         vim.api.nvim_set_hl(0, "IblWhitespace", { bg = "none" })
+    --         vim.api.nvim_set_hl(0, "IblScope", { bg = "none" })
+    --         vim.api.nvim_set_hl(0, "TelescopeNormal", { bg = "none" })
+    --         vim.api.nvim_set_hl(0, "TelescopeBorder", { bg = "none" })
+    --         vim.api.nvim_set_hl(0, "TelescopePromptNormal", { bg = "none" })
+    --         vim.api.nvim_set_hl(0, "TelescopePromptBorder", { bg = "none" })
+    --         vim.api.nvim_set_hl(0, "TelescopePromptTitle", { bg = "none" })
+    --         vim.api.nvim_set_hl(0, "TelescopePreviewNormal", { bg = "none" })
+    --         vim.api.nvim_set_hl(0, "TelescopePreviewBorder", { bg = "none" })
+    --         vim.api.nvim_set_hl(0, "TelescopePreviewTitle", { bg = "none" })
+    --         vim.api.nvim_set_hl(0, "TelescopeResultsNormal", { bg = "none" })
+    --         vim.api.nvim_set_hl(0, "TelescopeResultsBorder", { bg = "none" })
+    --         vim.api.nvim_set_hl(0, "TelescopeResultsTitle", { bg = "none" })
+    --     end,
+    -- },
     {
         "catppuccin/nvim",
         name = "catppuccin",
@@ -10,6 +39,23 @@ return {
                 enabled = false,
                 shade = "dark",
                 percentage = 0.15,
+            },
+            highlight_overrides = {
+                all = function(colors)
+                    return {
+                        TelescopeNormal = { bg = "NONE" },
+                        TelescopeBorder = { bg = "NONE" },
+                        TelescopePromptNormal = { bg = "NONE" },
+                        TelescopePromptBorder = { bg = "NONE" },
+                        TelescopePromptTitle = { bg = "NONE" },
+                        TelescopePreviewNormal = { bg = "NONE" },
+                        TelescopePreviewBorder = { bg = "NONE" },
+                        TelescopePreviewTitle = { bg = "NONE" },
+                        TelescopeResultsNormal = { bg = "NONE" },
+                        TelescopeResultsBorder = { bg = "NONE" },
+                        TelescopeResultsTitle = { bg = "NONE" },
+                    }
+                end,
             },
             integrations = {
                 cmp = true,
@@ -78,24 +124,50 @@ return {
         "nvim-lualine/lualine.nvim",
         dependencies = { "nvim-tree/nvim-web-devicons" },
         config = function()
+            local theme = require("lualine.themes.auto")
+            for _, mode in pairs(theme) do
+                for _, section in pairs(mode) do
+                    if type(section) == "table" then
+                        section.bg = "NONE"
+                    end
+                end
+            end
             require("lualine").setup({
                 options = {
                     icons_enabled = true,
-                    theme = "auto",
+                    theme = theme,
                     component_separators = { left = "", right = "" },
                     section_separators = { left = "", right = "" },
                     always_divide_middle = true,
-                    globalstatus = false,
+                    globalstatus = true,
                 },
                 sections = {
                     lualine_a = { "mode" },
-                    lualine_b = { "branch", "diff", "diagnostics" },
-                    lualine_c = {
-                        { "filename", path = 1 }, -- 0 = filename, 1 = relative, 2 = absolute
+                    lualine_b = {
+                        {
+                            "branch",
+                            color = { fg = '#666666'}
+                        },
+                        {
+                            "diagnostics",
+                            color = { fg = '#666666'}
+                        },
                     },
-                    lualine_x = { "encoding", "fileformat", "filetype" },
-                    lualine_y = { "progress" },
-                    lualine_z = { "location" },
+                    lualine_c = {
+                        {
+                            "filename",
+                            path = 2,
+                            color = { fg = '#666666'}
+                        },
+                    }, -- 0 = filename, 1 = relative, 2 = absolute, 3 = absolute with ~
+
+                    lualine_x = {
+                        { "encoding", color = { fg = '#666666'} },
+                        { "fileformat", color = { fg = '#666666'} },
+                        { "filetype", color = { fg = '#666666'} },
+                    },
+                    lualine_y = { },
+                    lualine_z = { },
                 },
                 inactive_sections = {
                     lualine_a = {},

@@ -41,10 +41,13 @@ vim.lsp.config.tailwindcss = {
     local package_json = vim.fs.find('package.json', { path = fname, upward = true })[1]
     if package_json then
       local package_dir = vim.fs.dirname(package_json)
-      local content = vim.fn.readfile(package_json)
-      local json_str = table.concat(content, '\n')
-      -- Simple check for tailwindcss in dependencies
-      if json_str:find('"tailwindcss"') then
+      local ok, content = pcall(vim.fn.readfile, package_json)
+      if not ok then return end
+      local decoded_ok, pkg = pcall(vim.json.decode, table.concat(content, '\n'))
+      if not decoded_ok or type(pkg) ~= 'table' then return end
+      local deps = pkg.dependencies or {}
+      local dev_deps = pkg.devDependencies or {}
+      if deps.tailwindcss or dev_deps.tailwindcss then
         on_dir(package_dir)
         return
       end
@@ -67,4 +70,4 @@ vim.lsp.config.tailwindcss = {
   },
 }
 
-vim.lsp.enable({ 'html', 'cssls', 'tailwindcss' })
+vim.lsp.enable('tailwindcss')

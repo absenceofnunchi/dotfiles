@@ -43,13 +43,21 @@ return {
 
         return {
             defaults = {
-                hidden = true,
-                no_ignore = true,
                 file_ignore_patterns = {
                     "node_modules",
-                    ".ruff_cache",
-                    ".giu/",
-                    ".mypy_cache",
+                    "%.ruff_cache",
+                    "%.git/",
+                    "%.mypy_cache",
+                    "%.class$",
+                    "%.jar$",
+                    "%.gradle/",
+                    "%.kotlin/",
+                    "%.idea/",
+                    "build/",
+                    "target/",
+                    "out/",
+                    "bin/",
+                    "%.next/",
                 },
                 mappings = {
                     i = {
@@ -75,11 +83,11 @@ return {
                     "--column",
                     "--smart-case",
                 },
-                pickers = {
-                    find_files = { hidden = true, no_ignore = true },
-                    git_files = { show_untracked = true },
-                },
                 preview = { hide_on_startup = false },
+            },
+            pickers = {
+                find_files = { hidden = true, no_ignore = true },
+                git_files = { show_untracked = true },
             },
         }
     end,

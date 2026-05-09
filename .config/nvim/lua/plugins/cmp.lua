@@ -32,6 +32,35 @@ return {
                     :match("%s") == nil
         end
 
+        -- vim-visual-multi can't replay cmp.confirm() (which mutates the buffer
+        -- via nvim_buf_set_text) across its other cursors. Instead, when VM is
+        -- active, dismiss the menu and type the completion as keystrokes so VM
+        -- sees per-character edits and replays them at every cursor.
+        local vm_complete = function(select_first)
+            if not vim.b.visual_multi then
+                return false
+            end
+            local entry = cmp.get_selected_entry()
+            if not entry and select_first then
+                cmp.select_next_item({ behavior = cmp.SelectBehavior.Select })
+                entry = cmp.get_selected_entry()
+            end
+            if not entry then
+                return false
+            end
+            local word = entry.word or entry:get_word()
+            if not word or word == "" then
+                return false
+            end
+            local _, col = unpack(vim.api.nvim_win_get_cursor(0))
+            local before = vim.api.nvim_get_current_line():sub(1, col)
+            local prefix = before:match("[%w_]+$") or ""
+            cmp.close()
+            local bs = vim.api.nvim_replace_termcodes("<BS>", true, false, true)
+            vim.api.nvim_feedkeys(string.rep(bs, vim.fn.strchars(prefix)) .. word, "n", false)
+            return true
+        end
+
         cmp.setup({
             completion = {
                 completeopt = "menu,menuone,preview,noinsert",
@@ -53,13 +82,23 @@ return {
                 ["<C-j>"] = cmp.mapping.select_next_item(),
                 ["<C-Space>"] = cmp.mapping.complete(),
                 ["<C-e>"] = cmp.mapping.close(),
-                ["<CR>"] = cmp.mapping.confirm({ select = false, behavior = cmp.ConfirmBehavior.Insert }),
+                ["<CR>"] = cmp.mapping(function(fallback)
+                    if cmp.visible() then
+                        if not vm_complete(false) then
+                            cmp.confirm({ select = false, behavior = cmp.ConfirmBehavior.Insert })
+                        end
+                    else
+                        fallback()
+                    end
+                end, { "i", "s" }),
                 ["<C-d>"] = cmp.mapping.scroll_docs(-4),
                 ["<C-f>"] = cmp.mapping.scroll_docs(4),
                 ["<Tab>"] = cmp.mapping(function(fallback)
                     if cmp.visible() then
-                        cmp.confirm({ select = true, behavior = cmp.ConfirmBehavior.Insert })
-                    elseif luasnip.expand_or_jumpable() then
+                        if not vm_complete(true) then
+                            cmp.confirm({ select = true, behavior = cmp.ConfirmBehavior.Insert })
+                        end
+                    elseif luasnip.expand_or_jumpable() and not vim.b.visual_multi then
                         luasnip.expand_or_jump()
                     elseif has_words_before() then
                         cmp.complete()
@@ -115,7 +154,18 @@ return {
         })
 
         cmp.setup.cmdline(":", {
-            mapping = cmp.mapping.preset.cmdline(),
+            mapping = cmp.mapping.preset.cmdline({
+                ["<Tab>"] = cmp.mapping(function(fallback)
+                    if cmp.visible() then
+                        if not cmp.get_selected_entry() then
+                            cmp.select_next_item({ behavior = cmp.SelectBehavior.Select })
+                        end
+                        cmp.confirm()
+                    else
+                        fallback()
+                    end
+                end, { "c" }),
+            }),
             sources = cmp.config.sources({
                 { name = "path" },
             }, {

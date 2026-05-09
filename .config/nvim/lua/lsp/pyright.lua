@@ -2,22 +2,24 @@ local shared = require('lsp.shared')
 
 -- Organize imports command
 local function organize_imports()
+    local bufnr = vim.api.nvim_get_current_buf()
+    local client = vim.lsp.get_clients({ name = 'pyright', bufnr = bufnr })[1]
+    if not client then
+        vim.notify("Pyright LSP client not found.", vim.log.levels.WARN)
+        return
+    end
+
     local params = {
         command = 'pyright.organizeimports',
-        arguments = { vim.uri_from_bufnr(0) },
+        arguments = { vim.uri_from_bufnr(bufnr) },
     }
-    local client = vim.lsp.get_active_clients({ name = 'pyright', bufnr = vim.api.nvim_get_current_buf() })[1]
-    if client then
-        client.request('workspace/executeCommand', params, function(err, _, result)
-            if err then
-                vim.notify("Error organizing imports: " .. tostring(err), vim.log.levels.ERROR)
-            elseif result then
-                vim.notify("Imports organized successfully.", vim.log.levels.INFO)
-            end
-        end)
-    else
-        vim.notify("Pyright LSP client not found.", vim.log.levels.WARN)
-    end
+    client:request('workspace/executeCommand', params, function(err)
+        if err then
+            vim.notify("Error organizing imports: " .. tostring(err.message or err), vim.log.levels.ERROR)
+        else
+            vim.notify("Imports organized successfully.", vim.log.levels.INFO)
+        end
+    end, bufnr)
 end
 
 -- Infer Python path dynamically
@@ -27,7 +29,7 @@ local function get_python_path(workspace)
     end
 
     -- Check for common virtual environment directories
-    for _, pattern in ipairs({ 'venv', '.venv', 'env', '.env' }) do
+    for _, pattern in ipairs({ 'venv', '.venv', 'env', 'virtualenv' }) do
         local match = vim.fs.joinpath(workspace, pattern, 'bin', 'python')
         if vim.fn.filereadable(match) == 1 then
             return match
@@ -63,9 +65,13 @@ vim.lsp.config.pyright = {
         })
     end,
 
+    before_init = function(_, config)
+        local root = config.root_dir or vim.fn.getcwd()
+        config.settings.python.pythonPath = get_python_path(root)
+    end,
+
     settings = {
         python = {
-            pythonPath = get_python_path(vim.fn.getcwd()),
             analysis = {
                 autoSearchPaths = true,
                 useLibraryCodeForTypes = true,

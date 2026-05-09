@@ -3,10 +3,15 @@ local shared = require('lsp.shared')
 -- HTML
 vim.lsp.config.html = {
   cmd = { 'vscode-html-language-server', '--stdio' },
-  filetypes = { 'html', 'javascriptreact', 'typescriptreact' },
+  filetypes = { 'html' },
   root_markers = { 'package.json', '.git' },
   capabilities = shared.capabilities,
   on_attach = shared.on_attach,
+  init_options = {
+    provideFormatter = true,
+    embeddedLanguages = { css = true, javascript = true },
+    configurationSection = { 'html', 'css', 'javascript' },
+  },
   settings = {
     html = {
       format = { enable = true },

@@ -3,16 +3,14 @@ local shared = require('lsp.shared')
 -- Custom commands for clangd
 local function switch_source_header(bufnr)
     bufnr = bufnr or vim.api.nvim_get_current_buf()
-    local clients = vim.lsp.get_active_clients({ name = 'clangd', bufnr = bufnr })
-    local clangd_client = clients[1]
-
+    local clangd_client = vim.lsp.get_clients({ name = 'clangd', bufnr = bufnr })[1]
     if not clangd_client then
-        print('clangd client not found')
+        vim.notify('clangd client not found', vim.log.levels.WARN)
         return
     end
 
     local params = { uri = vim.uri_from_bufnr(bufnr) }
-    clangd_client.request('textDocument/switchSourceHeader', params, function(err, result)
+    clangd_client:request('textDocument/switchSourceHeader', params, function(err, result)
         if err then
             vim.notify('Error switching source/header: ' .. tostring(err), vim.log.levels.ERROR)
             return
