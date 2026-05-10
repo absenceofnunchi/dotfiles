@@ -1,14 +1,22 @@
--- OSC 52 copy/paste from remote machine
+-- Clipboard: OSC 52 for copy (works locally and over SSH via tmux's `set-clipboard on`),
+-- pbpaste for paste. Never OSC 52 paste — it blocks nvim waiting for a terminal response
+-- that tmux popups + many terminals never send ("Waiting for OSC 52 response"). To paste
+-- the system clipboard into a remote nvim, use Cmd+V in insert mode (bracketed paste
+-- from the terminal — no provider needed on the remote side).
 vim.opt.clipboard = "unnamedplus"
+local osc52 = require("vim.ui.clipboard.osc52")
+local paste_fn = vim.fn.executable("pbpaste") == 1
+    and function() return vim.split(vim.fn.system("pbpaste"), "\n") end
+    or function() return vim.split(vim.fn.getreg('"'), "\n") end
 vim.g.clipboard = {
-    name = "OSC 52",
+    name = "osc52-copy + pbpaste",
     copy = {
-        ["+"] = require("vim.ui.clipboard.osc52").copy("+"),
-        ["*"] = require("vim.ui.clipboard.osc52").copy("*"),
+        ["+"] = osc52.copy("+"),
+        ["*"] = osc52.copy("*"),
     },
     paste = {
-        ["+"] = require("vim.ui.clipboard.osc52").paste("+"),
-        ["*"] = require("vim.ui.clipboard.osc52").paste("*"),
+        ["+"] = paste_fn,
+        ["*"] = paste_fn,
     },
 }
 
@@ -34,6 +42,7 @@ vim.opt.spelllang = "en"
 
 vim.opt.signcolumn = "yes"
 vim.opt.termguicolors = true
+vim.opt.fillchars:append({ eob = " " }) -- hide ~ on empty lines past end-of-buffer
 vim.opt.cmdheight = 0
 vim.opt.laststatus = 3
 vim.opt.inccommand = "split"

@@ -97,7 +97,6 @@ return {
             vim.cmd.colorscheme("catppuccin-macchiato")
         end,
     },
-
     {
         "kyazdani42/nvim-web-devicons",
         config = function()

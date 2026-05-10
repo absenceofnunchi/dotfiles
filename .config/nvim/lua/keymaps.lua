@@ -77,6 +77,110 @@ end, { silent = true, desc = "Open URL/file under cursor in Brave" })
 vim.keymap.set("n", "<Leader>rz", "<C-w>_<C-w>|", { desc = "Full size" })
 vim.keymap.set("n", "<Leader>rZ", "<C-w>=", { desc = "Even size" })
 
+-- Run an Android project's scripts/run.sh in a dedicated bottom terminal.
+-- <Leader>ra opens a picker over attached devices + available AVDs and runs
+-- the script with ANDROID_SERIAL or AVD set accordingly.
+-- <Leader>rA reruns the last selection without prompting.
+local run_android_buf
+local run_android_last
+
+local function list_attached()
+    local out = {}
+    for _, line in ipairs(vim.fn.systemlist({ "adb", "devices", "-l" })) do
+        local serial = line:match("^(%S+)%s+device%f[%s\0]")
+        if serial then
+            local model = line:match("model:(%S+)")
+            table.insert(out, { serial = serial, model = model and model:gsub("_", " ") or "" })
+        end
+    end
+    return out
+end
+
+local function list_avds()
+    if vim.fn.executable("emulator") == 0 then return {} end
+    local lines = vim.fn.systemlist({ "emulator", "-list-avds" })
+    local out = {}
+    for _, name in ipairs(lines) do
+        if name ~= "" and not name:match("^INFO") then table.insert(out, name) end
+    end
+    return out
+end
+
+local function running_avd_serial(name)
+    for _, dev in ipairs(list_attached()) do
+        if dev.serial:match("^emulator%-") then
+            local got = vim.fn.system({ "adb", "-s", dev.serial, "emu", "avd", "name" })
+            local first = (vim.split(got, "\n")[1] or ""):gsub("%s+$", "")
+            if first == name then return dev.serial end
+        end
+    end
+end
+
+local function spawn_run(choice)
+    local start = vim.fn.expand("%:p:h")
+    if start == "" then start = vim.fn.getcwd() end
+    local script = vim.fs.find("scripts/run.sh", { upward = true, path = start, type = "file" })[1]
+    if not script then
+        vim.notify("scripts/run.sh not found above " .. start, vim.log.levels.ERROR)
+        return
+    end
+    local root = vim.fs.dirname(vim.fs.dirname(script))
+
+    if run_android_buf and vim.api.nvim_buf_is_valid(run_android_buf) then
+        vim.api.nvim_buf_delete(run_android_buf, { force = true })
+    end
+
+    local env = vim.fn.environ()
+    if choice.kind == "serial" then env.ANDROID_SERIAL = choice.value end
+    if choice.kind == "avd" then env.AVD = choice.value end
+
+    vim.cmd("belowright 15split | enew")
+    run_android_buf = vim.api.nvim_get_current_buf()
+    vim.fn.jobstart({ "bash", script }, { cwd = root, env = env, term = true })
+    vim.api.nvim_buf_set_name(run_android_buf, "[Run Android: " .. choice.label .. "]")
+    vim.cmd("startinsert")
+    run_android_last = choice
+end
+
+local function pick_and_run()
+    local items = {}
+    for _, dev in ipairs(list_attached()) do
+        local label = dev.model ~= "" and (dev.serial .. " (" .. dev.model .. ")") or dev.serial
+        table.insert(items, { label = "[connected] " .. label, kind = "serial", value = dev.serial })
+    end
+    for _, name in ipairs(list_avds()) do
+        local serial = running_avd_serial(name)
+        if serial then
+            table.insert(items, {
+                label = "[avd-running] " .. name .. " → " .. serial,
+                kind = "serial",
+                value = serial,
+            })
+        else
+            table.insert(items, { label = "[avd-boot] " .. name, kind = "avd", value = name })
+        end
+    end
+    if #items == 0 then
+        vim.notify("No connected devices or AVDs found.", vim.log.levels.ERROR)
+        return
+    end
+    vim.ui.select(items, {
+        prompt = "Run Android on:",
+        format_item = function(item) return item.label end,
+    }, function(choice)
+        if choice then spawn_run(choice) end
+    end)
+end
+
+vim.keymap.set("n", "<Leader>ra", pick_and_run, { silent = true, desc = "Run Android (pick device)" })
+vim.keymap.set("n", "<Leader>rA", function()
+    if run_android_last then
+        spawn_run(run_android_last)
+    else
+        pick_and_run()
+    end
+end, { silent = true, desc = "Run Android (rerun last)" })
+
 -- Tab navigation with \
 for i = 1, 9 do
     vim.keymap.set("n", "\\" .. i, ":tabn " .. i .. "<CR>", { silent = true, desc = "Go to tab " .. i })

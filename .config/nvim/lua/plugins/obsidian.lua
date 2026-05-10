@@ -108,6 +108,19 @@ return {
                     silent = true,
                     desc = "Obsidian: follow link",
                 })
+                vim.keymap.set("n", "<CR>", function()
+                    return require("obsidian.api").smart_action()
+                end, {
+                    buffer = args.buf,
+                    expr = true,
+                    desc = "Obsidian: follow link / toggle checkbox / show tag / cycle fold",
+                })
+                vim.keymap.set("n", "]o", function()
+                    require("obsidian.api").nav_link("next")
+                end, { buffer = args.buf, silent = true, desc = "Obsidian: next link" })
+                vim.keymap.set("n", "[o", function()
+                    require("obsidian.api").nav_link("prev")
+                end, { buffer = args.buf, silent = true, desc = "Obsidian: prev link" })
                 vim.keymap.set("n", "gx", function()
                     local line = vim.api.nvim_get_current_line()
                     local col = vim.fn.col(".")
