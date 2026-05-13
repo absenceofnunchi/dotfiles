@@ -85,7 +85,7 @@ return {
                 ["<CR>"] = cmp.mapping(function(fallback)
                     if cmp.visible() then
                         if not vm_complete(false) then
-                            cmp.confirm({ select = false, behavior = cmp.ConfirmBehavior.Insert })
+                            cmp.confirm({ select = false, behavior = cmp.ConfirmBehavior.Replace })
                         end
                     else
                         fallback()
@@ -96,7 +96,7 @@ return {
                 ["<Tab>"] = cmp.mapping(function(fallback)
                     if cmp.visible() then
                         if not vm_complete(true) then
-                            cmp.confirm({ select = true, behavior = cmp.ConfirmBehavior.Insert })
+                            cmp.confirm({ select = true, behavior = cmp.ConfirmBehavior.Replace })
                         end
                     elseif luasnip.expand_or_jumpable() and not vim.b.visual_multi then
                         luasnip.expand_or_jump()
