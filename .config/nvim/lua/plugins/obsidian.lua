@@ -46,6 +46,9 @@ return {
         completion = { nvim_cmp = true, min_chars = 2 },
         picker = { name = "telescope.nvim" },
         legacy_commands = false,
+        -- Backlink/word counters recompute on every BufEnter/refresh — disable.
+        footer = { enabled = false },
+        statusline = { enabled = false },
         note_id_func = function(title)
             return (title and title ~= "") and title or require("obsidian.builtin").zettel_id()
         end,
@@ -66,7 +69,9 @@ return {
         },
         ui = {
             enable = true,
-            update_debounce = 200,
+            -- Full-buffer extmark rescan on every TextChanged* — throttle hard.
+            update_debounce = 1500,
+            max_file_length = 1500,
             bullets = { char = "•", hl_group = "ObsidianBullet" },
             external_link_icon = { char = "", hl_group = "ObsidianExtLinkIcon" },
             reference_text = { hl_group = "ObsidianRefText" },

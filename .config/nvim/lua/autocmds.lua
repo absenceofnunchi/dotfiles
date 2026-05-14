@@ -77,19 +77,12 @@ vim.api.nvim_create_autocmd("FileType", {
     end,
 })
 
--- Reload buffer if file changed externally (paired with vim.opt.autoread)
-vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold" }, {
+-- Reload buffer if file changed externally (paired with vim.opt.autoread).
+-- Dropped CursorHold — fires every 4s idle and adds nothing FocusGained/BufEnter don't cover.
+vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter" }, {
     group = aug("AutoRead"),
     pattern = "*",
     command = "checktime",
-})
-
-vim.api.nvim_create_autocmd("FileType", {
-    group = aug("SyntaxSpellTopLevel"),
-    pattern = "*",
-    callback = function()
-        vim.cmd([[syntax spell toplevel]])
-    end,
 })
 
 -- Spell on for these filetypes (swift handled separately above)
