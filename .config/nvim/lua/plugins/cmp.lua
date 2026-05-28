@@ -90,8 +90,9 @@ return {
                         return
                     end
                     -- Expand {|}, [|], (|) into an indented block, and
-                    -- ```|```, """|""", '''|''' into a fence (cursor on the
-                    -- middle line). cmp's <CR> mapping shadows autopairs's
+                    -- ```|```, ```lang|``` (with a language/info string),
+                    -- """|""", '''|''' into a fence (cursor on the middle
+                    -- line). cmp's <CR> mapping shadows autopairs's
                     -- expr-mapping, and round-tripping autopairs_cr() through
                     -- feedkeys mangles <CMD>/<Up>/<End> keycodes — so do the
                     -- expansion directly.
@@ -109,13 +110,16 @@ return {
                         vim.api.nvim_win_set_cursor(0, { row + 1, #inner })
                         return
                     end
-                    if col >= 3 then
-                        local trip = line:sub(col - 2, col)
-                        if (trip == "```" or trip == '"""' or trip == "'''")
-                            and line:sub(col + 1, col + 3) == trip then
+                    -- The opening fence may carry a language/info string
+                    -- (```bash), so match on the closing fence sitting just
+                    -- after the cursor rather than on the 3 chars before it.
+                    local before = line:sub(1, col)
+                    local after = line:sub(col + 1)
+                    for _, fence in ipairs({ "```", '"""', "'''" }) do
+                        if after:sub(1, 3) == fence and before:match("^%s*" .. fence .. ".*$") then
                             local base = line:match("^%s*") or ""
-                            vim.api.nvim_set_current_line(line:sub(1, col))
-                            vim.api.nvim_buf_set_lines(0, row, row, false, { base, base .. line:sub(col + 1) })
+                            vim.api.nvim_set_current_line(before)
+                            vim.api.nvim_buf_set_lines(0, row, row, false, { base, base .. after })
                             vim.api.nvim_win_set_cursor(0, { row + 1, #base })
                             return
                         end
