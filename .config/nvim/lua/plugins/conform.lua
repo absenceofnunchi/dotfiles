@@ -36,7 +36,28 @@ return {
         },
         formatters = {
             prettier = {
-                prepend_args = { "--single-quote", "--trailing-comma", "es5" },
+                -- Only auto-format when the project opted into prettier with
+                -- its own config. Otherwise prettier silently rewrites the
+                -- codebase to whatever defaults are in scope — quotes, line
+                -- wrapping, trailing commas — which is rude in projects that
+                -- weren't authored with prettier. `stop = HOME` prevents the
+                -- walk-up from picking up a stray ~/.prettierrc.
+                condition = function(_, ctx)
+                    local cfg = {
+                        ".prettierrc", ".prettierrc.json",
+                        ".prettierrc.yaml", ".prettierrc.yml",
+                        ".prettierrc.js", ".prettierrc.cjs",
+                        ".prettierrc.mjs", ".prettierrc.toml",
+                        "prettier.config.js", "prettier.config.cjs",
+                        "prettier.config.mjs",
+                    }
+                    return vim.fs.find(cfg, {
+                        upward = true,
+                        path = ctx.dirname,
+                        type = "file",
+                        stop = vim.env.HOME,
+                    })[1] ~= nil
+                end,
             },
             swift_format = {
                 command = "swift-format",

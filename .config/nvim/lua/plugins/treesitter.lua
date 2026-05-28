@@ -1,29 +1,32 @@
 return {
     "nvim-treesitter/nvim-treesitter",
-    branch = "master",
+    branch = "main",
     build = ":TSUpdate",
+    lazy = false,
     config = function()
-        require("nvim-treesitter.configs").setup({
-            ensure_installed = {
-                "c", "cpp", "json", "javascript", "typescript", "tsx",
-                "go", "swift", "python", "dockerfile", "yaml", "bash",
+        require("nvim-treesitter").setup({
+            install_dir = vim.fn.stdpath("data") .. "/site",
+        })
+
+        local parsers = {
+            "c", "cpp", "json", "javascript", "typescript", "tsx",
+            "go", "swift", "python", "dockerfile", "yaml", "bash",
+            "markdown", "markdown_inline", "graphql", "kotlin",
+        }
+        require("nvim-treesitter").install(parsers)
+
+        vim.api.nvim_create_autocmd("FileType", {
+            pattern = {
+                "c", "cpp", "json",
+                "javascript", "javascriptreact",
+                "typescript", "typescriptreact",
+                "go", "swift", "python",
+                "dockerfile", "yaml", "bash", "sh",
                 "markdown", "graphql", "kotlin",
             },
-            highlight = {
-                enable = true,
-                additional_vim_regex_highlighting = false,
-                disable = {},
-            },
-            incremental_selection = {
-                enable = true,
-                keymaps = {
-                    init_selection = "gnn",
-                    node_incremental = "gnr",
-                    scope_incremental = "gnc",
-                    node_decremental = "gnm",
-                },
-            },
-            indent = { enable = true },
+            callback = function()
+                pcall(vim.treesitter.start)
+            end,
         })
     end,
 }

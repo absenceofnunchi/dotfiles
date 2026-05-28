@@ -83,7 +83,7 @@ return {
                     "--column",
                     "--smart-case",
                 },
-                preview = { hide_on_startup = false },
+                preview = { hide_on_startup = false, treesitter = false },
             },
             pickers = {
                 find_files = { hidden = true, no_ignore = true },

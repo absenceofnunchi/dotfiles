@@ -87,9 +87,40 @@ return {
                         if not vm_complete(false) then
                             cmp.confirm({ select = false, behavior = cmp.ConfirmBehavior.Replace })
                         end
-                    else
-                        fallback()
+                        return
                     end
+                    -- Expand {|}, [|], (|) into an indented block, and
+                    -- ```|```, """|""", '''|''' into a fence (cursor on the
+                    -- middle line). cmp's <CR> mapping shadows autopairs's
+                    -- expr-mapping, and round-tripping autopairs_cr() through
+                    -- feedkeys mangles <CMD>/<Up>/<End> keycodes — so do the
+                    -- expansion directly.
+                    local pair_close = { ["{"] = "}", ["["] = "]", ["("] = ")" }
+                    local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+                    local line = vim.api.nvim_get_current_line()
+                    local prev = col > 0 and line:sub(col, col) or ""
+                    local next_ch = line:sub(col + 1, col + 1)
+                    if pair_close[prev] == next_ch and next_ch ~= "" then
+                        local base = line:match("^%s*") or ""
+                        local sw = vim.bo.shiftwidth > 0 and vim.bo.shiftwidth or vim.bo.tabstop
+                        local inner = base .. string.rep(" ", sw)
+                        vim.api.nvim_set_current_line(line:sub(1, col))
+                        vim.api.nvim_buf_set_lines(0, row, row, false, { inner, base .. line:sub(col + 1) })
+                        vim.api.nvim_win_set_cursor(0, { row + 1, #inner })
+                        return
+                    end
+                    if col >= 3 then
+                        local trip = line:sub(col - 2, col)
+                        if (trip == "```" or trip == '"""' or trip == "'''")
+                            and line:sub(col + 1, col + 3) == trip then
+                            local base = line:match("^%s*") or ""
+                            vim.api.nvim_set_current_line(line:sub(1, col))
+                            vim.api.nvim_buf_set_lines(0, row, row, false, { base, base .. line:sub(col + 1) })
+                            vim.api.nvim_win_set_cursor(0, { row + 1, #base })
+                            return
+                        end
+                    end
+                    fallback()
                 end, { "i", "s" }),
                 ["<C-d>"] = cmp.mapping.scroll_docs(-4),
                 ["<C-f>"] = cmp.mapping.scroll_docs(4),
