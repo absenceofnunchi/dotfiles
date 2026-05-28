@@ -121,5 +121,3 @@ vim.api.nvim_create_autocmd("TextYankPost", {
 vim.api.nvim_create_user_command("DelFile", function(opts)
     vim.fn.delete(opts.args)
 end, { nargs = 1 })
-
-vim.api.nvim_create_user_command("Temp", "ObsidianTemplate", {})

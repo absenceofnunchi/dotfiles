@@ -1,4 +1,4 @@
-local vault = "/Users/gin/Library/Mobile Documents/iCloud~md~obsidian"
+local vault = "/Users/gin/mac-backup-main/ObsidianVault"
 
 local function grep_to_qf(pattern, title)
     local out = vim.fn.systemlist({ "rg", "-l", "--", pattern, vault })
@@ -53,12 +53,12 @@ return {
             return (title and title ~= "") and title or require("obsidian.builtin").zettel_id()
         end,
         templates = {
-            subdir = "Documents/Templates/",
+            folder = "Templates",
             date_format = "%Y-%m-%d-%a",
             time_format = "%H:%M",
         },
         daily_notes = {
-            folder = "Documents/Journal/Daily",
+            folder = "Journal/Daily",
             date_format = "%Y-%m-%d",
             alias_format = "%B %-d, %Y",
             default_tags = { "journal" },
