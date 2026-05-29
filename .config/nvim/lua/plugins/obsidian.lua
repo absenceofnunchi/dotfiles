@@ -17,11 +17,35 @@ return {
     "obsidian-nvim/obsidian.nvim",
     lazy = true,
     event = {
-        { event = { "BufReadPre", "BufNewFile" }, pattern = vault .. "/**/*.md" },
+        -- `**/*.md` alone compiles to `.../ObsidianVault/.*/.*\.md$`, whose `/.*/`
+        -- REQUIRES a subdirectory — so notes in the vault ROOT (e.g. Yazi.md) never
+        -- match and obsidian (hence obsidian-ls completion) never loads. List both.
+        { event = { "BufReadPre", "BufNewFile" }, pattern = { vault .. "/*.md", vault .. "/**/*.md" } },
     },
     cmd = { "Obsidian", "Today" },
     dependencies = { "nvim-lua/plenary.nvim" },
     init = function()
+        -- Native LSP completion for obsidian's in-process `obsidian-ls` server.
+        -- Registered in init() (startup, pre-load) so it exists before obsidian-ls
+        -- attaches to the first vault buffer. Trigger chars are hacked to every ASCII
+        -- byte so `[[` and `#` pop the menu live; `noselect` stops auto-accepting a
+        -- candidate (which would accidentally create a new note). Requires Neovim 0.11+.
+        local trigger_chars = {}
+        for i = 32, 126 do
+            table.insert(trigger_chars, string.char(i))
+        end
+        vim.api.nvim_create_autocmd("LspAttach", {
+            group = vim.api.nvim_create_augroup("ObsidianLspCompletion", { clear = true }),
+            callback = function(ev)
+                local client = vim.lsp.get_client_by_id(ev.data.client_id)
+                if client and client.name == "obsidian-ls" then
+                    client.server_capabilities.completionProvider.triggerCharacters = trigger_chars
+                    vim.bo[ev.buf].completeopt = "menuone,noselect,fuzzy,nosort"
+                    vim.lsp.completion.enable(true, client.id, ev.buf, { autotrigger = true })
+                end
+            end,
+        })
+
         vim.api.nvim_create_user_command("Created", function(o)
             local date = (o.args ~= "" and o.args) or os.date("%Y-%m-%d")
             grep_to_qf("^Date: " .. date, "Created " .. date)
@@ -43,7 +67,12 @@ return {
                 path = vault,
             },
         },
-        completion = { nvim_cmp = true, min_chars = 2 },
+        -- You use native vim.lsp.completion (wired in init() below), not nvim-cmp.
+        -- The in-process `obsidian-ls` LSP runs regardless of this flag; nvim_cmp=false
+        -- just stops obsidian registering an nvim-cmp source you don't have.
+        -- min_chars = number of query chars before notes are offered. 1 → `[[f` lists
+        -- `file.md`; set 0 to mimic Obsidian (bare `[[` lists the whole vault).
+        completion = { nvim_cmp = false, min_chars = 1 },
         picker = { name = "telescope.nvim" },
         legacy_commands = false,
         -- Backlink/word counters recompute on every BufEnter/refresh — disable.
@@ -69,6 +98,10 @@ return {
         },
         ui = {
             enable = true,
+            -- Silence the conceallevel=0 warning (issue #286). conceallevel is
+            -- window-local, so it can read 0 in a window the FileType autocmd
+            -- below never touched (e.g. a picker/split opened by :Obsidian template).
+            ignore_conceal_warn = true,
             -- Full-buffer extmark rescan on every TextChanged* — throttle hard.
             update_debounce = 1500,
             max_file_length = 1500,
