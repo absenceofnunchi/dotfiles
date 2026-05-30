@@ -22,7 +22,7 @@ return {
         -- match and obsidian (hence obsidian-ls completion) never loads. List both.
         { event = { "BufReadPre", "BufNewFile" }, pattern = { vault .. "/*.md", vault .. "/**/*.md" } },
     },
-    cmd = { "Obsidian", "Today" },
+    cmd = { "Obsidian", "Temp", "Today" },
     dependencies = { "nvim-lua/plenary.nvim" },
     init = function()
         -- Native LSP completion for obsidian's in-process `obsidian-ls` server.
@@ -59,6 +59,10 @@ return {
         vim.api.nvim_create_user_command("Today", function()
             vim.cmd("Obsidian today")
         end, { desc = "Obsidian: open today's daily note" })
+
+        vim.api.nvim_create_user_command("Temp", function()
+            vim.cmd("Obsidian new_from_template")
+        end, { desc = "Obsidian: new note from template" })
     end,
     opts = {
         workspaces = {
@@ -175,9 +179,6 @@ return {
                         vim.notify("no URL under cursor", vim.log.levels.WARN)
                     end
                 end, { buffer = args.buf, silent = true, desc = "Open external link" })
-                vim.api.nvim_buf_create_user_command(args.buf, "Temp", "Obsidian new_from_template", {
-                    desc = "Obsidian: insert from template",
-                })
             end,
         })
     end,
