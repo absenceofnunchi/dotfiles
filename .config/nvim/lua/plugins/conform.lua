@@ -8,7 +8,7 @@ return {
             mode = { "n", "v" },
             function()
                 require("conform").format({
-                    lsp_fallback = true,
+                    lsp_format = "fallback",
                     async = false,
                     timeout_ms = 500,
                 })
@@ -17,6 +17,12 @@ return {
         },
     },
     opts = {
+        -- html/css have no native formatter here (prettier is gated below), so they
+        -- format via LSP fallback. Before the LSP attaches (cold save) conform would
+        -- otherwise warn "Formatters unavailable for html file" even though the LSP
+        -- handles it once warm. Silence that misleading notice; real formatter errors
+        -- still surface via notify_on_error.
+        notify_no_formatters = false,
         formatters_by_ft = {
             javascript = { "prettier" },
             javascriptreact = { "prettier" },
@@ -32,7 +38,7 @@ return {
         },
         format_on_save = {
             timeout_ms = 500,
-            lsp_fallback = true,
+            lsp_format = "fallback",
         },
         formatters = {
             prettier = {
