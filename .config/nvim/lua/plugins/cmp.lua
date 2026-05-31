@@ -110,6 +110,21 @@ return {
                         vim.api.nvim_win_set_cursor(0, { row + 1, #inner })
                         return
                     end
+                    -- HTML/JSX tag pair: <foo>|</foo> -> open an indented
+                    -- block with the cursor on the middle line, matching the
+                    -- multi-line friendly-snippets version. (Emmet expands an
+                    -- empty element to a single line; this nests it on <CR>.)
+                    local tb = line:sub(1, col)
+                    local ta = line:sub(col + 1)
+                    if tb:match("<%w[^<>]*>$") and ta:match("^</%w") then
+                        local base = line:match("^%s*") or ""
+                        local sw = vim.bo.shiftwidth > 0 and vim.bo.shiftwidth or vim.bo.tabstop
+                        local inner = base .. string.rep(" ", sw)
+                        vim.api.nvim_set_current_line(tb)
+                        vim.api.nvim_buf_set_lines(0, row, row, false, { inner, base .. ta })
+                        vim.api.nvim_win_set_cursor(0, { row + 1, #inner })
+                        return
+                    end
                     -- The opening fence may carry a language/info string
                     -- (```bash), so match on the closing fence sitting just
                     -- after the cursor rather than on the 3 chars before it.
