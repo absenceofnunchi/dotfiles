@@ -66,7 +66,12 @@ return {
                 end,
             },
             swift_format = {
-                command = "swift-format",
+                -- swift-format isn't on PATH; it ships inside the Xcode
+                -- toolchain. Invoke it via `xcrun` so formatting works without a
+                -- separate install. Without this, conform can't find the binary
+                -- and silently falls back to SourceKit-LSP, which ignores the
+                -- config below and formats with swift-format's stock defaults.
+                command = "xcrun",
                 args = function(_, ctx)
                     local project = vim.fs.find(".swift-format", {
                         upward = true,
@@ -75,7 +80,7 @@ return {
                     })[1]
                     local config = project
                         or (vim.fn.stdpath("config") .. "/swift-format.json")
-                    return { "--configuration", config, "-" }
+                    return { "swift-format", "--configuration", config, "-" }
                 end,
                 stdin = true,
             },
