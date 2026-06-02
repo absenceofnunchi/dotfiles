@@ -131,6 +131,31 @@ return {
                     end
                 end
             end
+
+            -- Macro-recording indicator. cmdheight=0 hides the default
+            -- "recording @q" message, so surface it in the statusline instead.
+            local function macro_recording()
+                local reg = vim.fn.reg_recording()
+                if reg == "" then return "" end
+                return " REC @" .. reg
+            end
+
+            -- lualine doesn't refresh on these events by default, so the
+            -- indicator would lag a keystroke without an explicit refresh.
+            local rec_group = vim.api.nvim_create_augroup("LualineMacroRec", { clear = true })
+            vim.api.nvim_create_autocmd("RecordingEnter", {
+                group = rec_group,
+                callback = function() require("lualine").refresh() end,
+            })
+            vim.api.nvim_create_autocmd("RecordingLeave", {
+                group = rec_group,
+                -- reg_recording() is still set at RecordingLeave; defer so the
+                -- indicator clears instead of lingering one frame.
+                callback = function()
+                    vim.defer_fn(function() require("lualine").refresh() end, 50)
+                end,
+            })
+
             require("lualine").setup({
                 options = {
                     icons_enabled = true,
@@ -165,7 +190,9 @@ return {
                         { "fileformat", color = { fg = '#666666'} },
                         { "filetype", color = { fg = '#666666'} },
                     },
-                    lualine_y = { },
+                    lualine_y = {
+                        { macro_recording, color = { fg = "#ed8796", gui = "bold" } },
+                    },
                     lualine_z = { },
                 },
                 inactive_sections = {

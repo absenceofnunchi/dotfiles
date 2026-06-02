@@ -71,12 +71,13 @@ return {
                 path = vault,
             },
         },
-        -- You use native vim.lsp.completion (wired in init() below), not nvim-cmp.
-        -- The in-process `obsidian-ls` LSP runs regardless of this flag; nvim_cmp=false
-        -- just stops obsidian registering an nvim-cmp source you don't have.
-        -- min_chars = number of query chars before notes are offered. 1 → `[[f` lists
-        -- `file.md`; set 0 to mimic Obsidian (bare `[[` lists the whole vault).
-        completion = { nvim_cmp = false, min_chars = 1 },
+        -- You use native vim.lsp.completion (wired in init() above) via the in-process
+        -- `obsidian-ls` LSP. The old `nvim_cmp`/`blink` flags are deprecated (stripped +
+        -- warned now, removed in obsidian.nvim 4.0) — completion is LSP-only, so omit them.
+        -- min_chars = number of query chars before notes are offered (still live; read by
+        -- the refs/tags/new completion sources). 1 → `[[f` lists `file.md`; set 0 to mimic
+        -- Obsidian (bare `[[` lists the whole vault).
+        completion = { min_chars = 1 },
         picker = { name = "telescope.nvim" },
         legacy_commands = false,
         -- Backlink/word counters recompute on every BufEnter/refresh — disable.
