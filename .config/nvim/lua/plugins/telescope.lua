@@ -45,6 +45,7 @@ return {
             defaults = {
                 file_ignore_patterns = {
                     "node_modules",
+                    "Pods/",
                     "%.ruff_cache",
                     "%.git/",
                     "%.mypy_cache",
