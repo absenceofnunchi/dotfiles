@@ -164,22 +164,6 @@ return {
                 vim.keymap.set("n", "[o", function()
                     require("obsidian.api").nav_link("prev")
                 end, { buffer = args.buf, silent = true, desc = "Obsidian: prev link" })
-                vim.keymap.set("n", "gx", function()
-                    local line = vim.api.nvim_get_current_line()
-                    local col = vim.fn.col(".")
-                    for s, url, e in line:gmatch("()%[[^%]]*%]%((%S-)%)()") do
-                        if col >= s and col < e then
-                            vim.ui.open(url)
-                            return
-                        end
-                    end
-                    local url = vim.fn.expand("<cWORD>"):match("https?://%S+")
-                    if url then
-                        vim.ui.open(url)
-                    else
-                        vim.notify("no URL under cursor", vim.log.levels.WARN)
-                    end
-                end, { buffer = args.buf, silent = true, desc = "Open external link" })
             end,
         })
     end,

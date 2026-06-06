@@ -68,10 +68,29 @@ vim.keymap.set("n", "<C-a>l", "<C-w>l", { silent = true, desc = "Move to right w
 
 vim.keymap.set("n", "<leader>nh", ":nohl<CR>", { desc = "Clear search highlights", silent = true })
 
--- Open URL/file under cursor in Brave
+-- Open the URL/file under the cursor in the OS default browser (vim.ui.open).
+-- <cfile> grabs whole URLs (query strings included) but only when the cursor is
+-- ON the URL — for a markdown [text](url) the cursor usually sits on the text, so
+-- scan the line for the [..](url) span first, then fall back to a bare URL/<cfile>.
 vim.keymap.set("n", "gx", function()
-    vim.fn.jobstart({ "open", "-a", "Brave Browser", vim.fn.expand("<cfile>") }, { detach = true })
-end, { silent = true, desc = "Open URL/file under cursor in Brave" })
+    local line = vim.api.nvim_get_current_line()
+    local col = vim.fn.col(".")
+    local url
+    for s, target, e in line:gmatch("()%[[^%]]*%]%((%S-)%)()") do
+        if col >= s and col < e then
+            url = target
+            break
+        end
+    end
+    if not url or url == "" then
+        url = vim.fn.expand("<cWORD>"):match("https?://%S+") or vim.fn.expand("<cfile>")
+    end
+    if url and url ~= "" then
+        vim.ui.open(url)
+    else
+        vim.notify("gx: no URL or file under cursor", vim.log.levels.WARN)
+    end
+end, { silent = true, desc = "Open URL/file under cursor (default browser)" })
 
 -- Zoom
 vim.keymap.set("n", "<Leader>rz", "<C-w>_<C-w>|", { desc = "Full size" })
