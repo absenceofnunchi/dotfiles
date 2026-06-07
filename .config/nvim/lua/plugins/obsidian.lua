@@ -56,19 +56,35 @@ local function journal_run(args)
 end
 
 local function open_period(period, date)
+    -- Resolve the path WITHOUT creating (journal path) so a missing note can prompt
+    -- first; existing notes still get re-stamped (nav/calendar) by `ensure` on open.
+    local resolve = { "path", "--root", vault, "--period", period }
+    if date and date ~= "" then vim.list_extend(resolve, { "--date", date }) end
+    local path = journal_run(resolve)
+    if not (path and path ~= "") then return end
+    if vim.fn.filereadable(path) == 0 then
+        local id = vim.fn.fnamemodify(path, ":t:r")
+        if vim.fn.confirm(("Create %s note %s?"):format(period, id), "&Yes\n&No", 2) ~= 1 then return end
+    end
     local args = { "ensure", "--root", vault, "--period", period }
     if date and date ~= "" then vim.list_extend(args, { "--date", date }) end
-    local path = journal_run(args)
-    if path and path ~= "" then vim.cmd("edit " .. vim.fn.fnameescape(path)) end
+    local final = journal_run(args)
+    if final and final ~= "" then vim.cmd("edit " .. vim.fn.fnameescape(final)) end
 end
 
--- Scaffold a MISSING period note (week/month/quarter/year) on open, else return the
--- path unchanged (existing notes, dailies, and non-period notes pass straight through).
+-- Scaffold a MISSING period note (week/month/quarter/year) on open — but ASK first, so
+-- merely navigating to a not-yet-existing period doesn't silently create a file. Returns
+-- the path to open, or nil if it's missing and the user declines. Existing notes,
+-- dailies, and non-period notes pass straight through.
 local function ensure_path(path)
     if vim.fn.filereadable(path) == 1 then return path end
     local period = PERIOD_OF_DIR[path:match("/Journal/(%w+)/") or ""]
     if not period then return path end
-    local p = journal_run({ "ensure", "--root", vault, "--period", period, "--id", vim.fn.fnamemodify(path, ":t:r") })
+    local id = vim.fn.fnamemodify(path, ":t:r")
+    if vim.fn.confirm(("Create %s note %s?"):format(period, id), "&Yes\n&No", 2) ~= 1 then
+        return nil -- declined → caller opens nothing
+    end
+    local p = journal_run({ "ensure", "--root", vault, "--period", period, "--id", id })
     return (p and p ~= "") and p or path
 end
 
@@ -90,7 +106,8 @@ local function zoom(rel)
     if path:match("/Journal/Daily/") and vim.fn.filereadable(path) == 0 then
         vim.notify("No daily " .. vim.fn.fnamemodify(path, ":t:r") .. " yet (use :Today)", vim.log.levels.INFO); return
     end
-    vim.cmd("edit " .. vim.fn.fnameescape(ensure_path(path)))
+    local target = ensure_path(path)
+    if target then vim.cmd("edit " .. vim.fn.fnameescape(target)) end
 end
 
 -- Context sidebar — a vertical split showing, for the file you're editing: the
@@ -174,6 +191,11 @@ end
 local function context_open_under_cursor()
     local entry = Context.path_map[vim.api.nvim_win_get_cursor(0)[1]]
     if not entry then return end -- header / blank / _none_ line
+    -- A not-yet-created week/month/quarter/year (e.g. a Calendar link) prompts to
+    -- scaffold from its skeleton; decline → stay in the sidebar and open nothing.
+    -- ensure_path is a no-op for existing notes, dailies, and non-period notes.
+    local dest = ensure_path(entry.path)
+    if not dest then return end
     local target = Context.main_win
     if not (target and vim.api.nvim_win_is_valid(target)) or target == Context.win then
         target = nil
@@ -182,10 +204,7 @@ local function context_open_under_cursor()
         end
     end
     if target then vim.fn.win_gotoid(target) end
-    -- gf a not-yet-created week/month/quarter/year (e.g. from the Calendar section) →
-    -- scaffold it from its skeleton instead of opening a blank buffer. ensure_path is
-    -- a no-op for existing notes, dailies, and non-period notes.
-    vim.cmd("edit " .. vim.fn.fnameescape(ensure_path(entry.path)))
+    vim.cmd("edit " .. vim.fn.fnameescape(dest))
     if entry.lnum and entry.lnum > 1 then -- tasks jump to their exact line
         pcall(vim.api.nvim_win_set_cursor, 0, { entry.lnum, 0 })
     end

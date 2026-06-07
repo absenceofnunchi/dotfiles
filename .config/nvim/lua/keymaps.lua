@@ -1,7 +1,33 @@
-vim.keymap.set("n", "<Leader>rm", function()
-    vim.fn.delete(vim.fn.expand("%"))
+-- Delete the current buffer's file — but confirm first, and route to macOS Trash
+-- (the `trash` CLI if installed, which keeps Finder "Put Back"; otherwise a
+-- collision-safe move into ~/.Trash) instead of an irreversible unlink.
+local function trash_current_file()
+    local file = vim.fn.expand("%:p")
+    if file == "" or vim.fn.filereadable(file) == 0 then
+        vim.notify("No saved file in this buffer to delete", vim.log.levels.WARN)
+        return
+    end
+    if vim.fn.confirm("Move to Trash:  " .. vim.fn.fnamemodify(file, ":~") .. " ?", "&Yes\n&No", 2) ~= 1 then
+        return
+    end
+    if vim.fn.executable("trash") == 1 then
+        vim.fn.system({ "trash", file })
+    else
+        local dest = vim.fn.expand("~/.Trash/") .. vim.fn.fnamemodify(file, ":t")
+        if vim.fn.filereadable(dest) == 1 or vim.fn.isdirectory(dest) == 1 then
+            dest = dest .. "." .. os.date("%Y%m%d%H%M%S") -- don't clobber a same-named trashed file
+        end
+        vim.fn.system({ "mv", file, dest })
+    end
+    if vim.v.shell_error ~= 0 then
+        vim.notify("Trash failed for " .. file, vim.log.levels.ERROR)
+        return
+    end
     vim.cmd("bdelete!")
-end, { desc = "Delete current file" })
+    vim.notify("Trashed " .. vim.fn.fnamemodify(file, ":t"), vim.log.levels.INFO)
+end
+
+vim.keymap.set("n", "<Leader>rm", trash_current_file, { desc = "Move current file to Trash" })
 vim.keymap.set("n", "<Leader>tn", ":tabnext<CR>", { silent = true, desc = "Next tab" })
 vim.keymap.set("n", "<Leader>tp", ":tabprevious<CR>", { silent = true, desc = "Previous tab" })
 vim.keymap.set("n", "<Leader>bn", ":bnext<CR>", { silent = true, desc = "Next buffer" })
