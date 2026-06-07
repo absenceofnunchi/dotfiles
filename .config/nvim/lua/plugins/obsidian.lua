@@ -13,6 +13,28 @@ local function grep_to_qf(pattern, title)
     vim.cmd("copen")
 end
 
+-- Planner agenda — same ripgrep→quickfix idiom as :Created/:Tag, but for tasks.
+-- All date logic lives in _PlannerSandbox/bin/agenda (one source of truth); this just
+-- loads its --format=quickfix output, scanning the WHOLE vault (--root vault).
+local agenda = vault .. "/_PlannerSandbox/bin/agenda"
+
+local function load_agenda_qf(title, extra)
+    local cmd = { agenda, "--format", "quickfix", "--root", vault }
+    vim.list_extend(cmd, extra or {})
+    local lines = vim.fn.systemlist(cmd)
+    if vim.v.shell_error ~= 0 then
+        vim.notify("agenda failed:\n" .. table.concat(lines, "\n"), vim.log.levels.ERROR)
+        return
+    end
+    if #lines == 0 then
+        vim.notify("planner: nothing in '" .. title .. "'", vim.log.levels.INFO)
+        return
+    end
+    local parsed = vim.fn.getqflist({ lines = lines, efm = "%f:%l:%c: %m" })
+    vim.fn.setqflist({}, " ", { title = title, items = parsed.items })
+    vim.cmd("copen")
+end
+
 return {
     "obsidian-nvim/obsidian.nvim",
     lazy = true,
@@ -63,6 +85,24 @@ return {
         vim.api.nvim_create_user_command("Temp", function()
             vim.cmd("Obsidian new_from_template")
         end, { desc = "Obsidian: new note from template" })
+
+        -- Planner task views (whole vault) → quickfix; <CR> jumps to the task line.
+        vim.api.nvim_create_user_command("Agenda", function()
+            load_agenda_qf("Agenda — today", { "--bucket", "focus" })
+        end, { desc = "Planner: appts + overdue + today (whole vault)" })
+
+        vim.api.nvim_create_user_command("Overdue", function()
+            load_agenda_qf("Overdue", { "--bucket", "overdue" })
+        end, { desc = "Planner: overdue tasks" })
+
+        vim.api.nvim_create_user_command("Tasks", function()
+            load_agenda_qf("All scheduled", { "--bucket", "all" })
+        end, { desc = "Planner: everything scheduled" })
+
+        vim.api.nvim_create_user_command("Week", function(o)
+            local n = (o.args ~= "" and o.args) or "7"
+            load_agenda_qf("Next " .. n .. " days", { "--bucket", "week", "--days", n })
+        end, { nargs = "?", desc = "Planner: upcoming N days (default 7)" })
     end,
     opts = {
         workspaces = {
