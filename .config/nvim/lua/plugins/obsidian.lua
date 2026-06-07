@@ -35,6 +35,131 @@ local function load_agenda_qf(title, extra)
     vim.cmd("copen")
 end
 
+-- Context sidebar — a vertical split showing, for the file you're editing: the
+-- 30-day task agenda + recently created/modified (global) + shared-tags +
+-- backlinks, as [[wikilinks]]. Event-driven (debounced BufWinEnter) and async
+-- (vim.system) — zero idle cost, never blocks typing. Data comes from
+-- _PlannerSandbox/bin/context (one source of truth); gf/<CR> on a bullet open
+-- the target in the MAIN editor window (tasks jump to their exact line) via a
+-- line→path map the script emits, so same-basename notes resolve deterministically.
+local context_script  = vault .. "/_PlannerSandbox/bin/context"
+local context_sidebar = vault .. "/_PlannerSandbox/.context-sidebar.md" -- real, gitignored
+local CTX_WIDTH, CTX_DEBOUNCE = 42, 200
+
+local Context = { buf = nil, win = nil, main_win = nil, timer = nil, path_map = {} }
+
+function Context.is_vault_md(buf)
+    local name = vim.api.nvim_buf_get_name(buf)
+    if name == "" or name == context_sidebar or not name:match("%.md$") then
+        return false
+    end
+    return name:sub(1, #vault + 1) == vault .. "/"
+end
+
+function Context.is_open()
+    return Context.win ~= nil and vim.api.nvim_win_is_valid(Context.win)
+end
+
+-- split the script's %%context-map block into Context.path_map; show the rest.
+-- caller MUST split stdout WITHOUT trimming empties, so line numbers stay aligned.
+local function context_apply(lines)
+    if not (Context.buf and vim.api.nvim_buf_is_valid(Context.buf)) then return end
+    local display, map, in_map = {}, {}, false
+    for _, l in ipairs(lines) do
+        if l == "%%context-map" then
+            in_map = true
+        elseif in_map then
+            if l == "%%" then break end
+            local n, lnum, p = l:match("^(%d+)::(%d+)::(.+)$")
+            if n then map[tonumber(n)] = { path = p, lnum = tonumber(lnum) } end
+        else
+            display[#display + 1] = l
+        end
+    end
+    Context.path_map = map
+    vim.bo[Context.buf].modifiable = true
+    vim.api.nvim_buf_set_lines(Context.buf, 0, -1, false, display)
+    vim.bo[Context.buf].modifiable = false
+    vim.bo[Context.buf].modified = false -- never nag about the unsaved scratch buffer
+end
+
+local function context_refresh(file)
+    vim.system(
+        { context_script, "--root", vault, "--file", file, "--format", "md", "--limit", "8" },
+        { text = true },
+        function(res)
+            if res.code ~= 0 then return end
+            local lines = vim.split(res.stdout, "\n", { plain = true }) -- keep empties!
+            vim.schedule(function() context_apply(lines) end)
+        end
+    )
+end
+
+function Context.schedule_refresh()
+    local cur = vim.api.nvim_get_current_buf()
+    if cur == Context.buf or not Context.is_vault_md(cur) then return end
+    Context.main_win = vim.api.nvim_get_current_win() -- where gf should land
+    local file = vim.api.nvim_buf_get_name(cur)
+    if Context.timer then Context.timer:stop() end
+    Context.timer = vim.uv.new_timer()
+    Context.timer:start(CTX_DEBOUNCE, 0, function()
+        Context.timer:stop()
+        Context.timer:close()
+        Context.timer = nil
+        vim.schedule(function()
+            if Context.is_open() then context_refresh(file) end
+        end)
+    end)
+end
+
+-- gf/<CR> in the sidebar: open the target in the MAIN window via the map.
+local function context_open_under_cursor()
+    local entry = Context.path_map[vim.api.nvim_win_get_cursor(0)[1]]
+    if not entry then return end -- header / blank / _none_ line
+    local target = Context.main_win
+    if not (target and vim.api.nvim_win_is_valid(target)) or target == Context.win then
+        target = nil
+        for _, w in ipairs(vim.api.nvim_list_wins()) do
+            if w ~= Context.win then target = w; break end
+        end
+    end
+    if target then vim.fn.win_gotoid(target) end
+    vim.cmd("edit " .. vim.fn.fnameescape(entry.path))
+    if entry.lnum and entry.lnum > 1 then -- tasks jump to their exact line
+        pcall(vim.api.nvim_win_set_cursor, 0, { entry.lnum, 0 })
+    end
+end
+
+function Context.open()
+    local origin = vim.api.nvim_get_current_win()
+    vim.cmd("botright vsplit " .. vim.fn.fnameescape(context_sidebar))
+    Context.win = vim.api.nvim_get_current_win()
+    Context.buf = vim.api.nvim_get_current_buf()
+    vim.api.nvim_win_set_width(Context.win, CTX_WIDTH)
+    vim.wo[Context.win].number = false
+    vim.wo[Context.win].relativenumber = false
+    vim.wo[Context.win].winfixwidth = true
+    vim.wo[Context.win].conceallevel = 1 -- render [[ ]] here too
+    vim.wo[Context.win].concealcursor = "nc"
+    vim.wo[Context.win].wrap = false
+    vim.bo[Context.buf].buflisted = false
+    vim.bo[Context.buf].swapfile = false
+    vim.bo[Context.buf].bufhidden = "hide"
+    -- our own gf/<CR> (set AFTER the split so they win over obsidian's vault gf)
+    vim.keymap.set("n", "gf", context_open_under_cursor, { buffer = Context.buf, silent = true, desc = "Context: open in main window" })
+    vim.keymap.set("n", "<CR>", context_open_under_cursor, { buffer = Context.buf, silent = true, desc = "Context: open in main window" })
+    vim.keymap.set("n", "q", function() Context.close() end, { buffer = Context.buf, silent = true, desc = "Context: close sidebar" })
+    if vim.api.nvim_win_is_valid(origin) then
+        vim.api.nvim_set_current_win(origin) -- restore focus; don't steal it
+    end
+    Context.schedule_refresh()
+end
+
+function Context.close()
+    if Context.is_open() then vim.api.nvim_win_close(Context.win, true) end
+    Context.win, Context.buf = nil, nil
+end
+
 return {
     "obsidian-nvim/obsidian.nvim",
     lazy = true,
@@ -103,6 +228,10 @@ return {
             local n = (o.args ~= "" and o.args) or "7"
             load_agenda_qf("Next " .. n .. " days", { "--bucket", "week", "--days", n })
         end, { nargs = "?", desc = "Planner: upcoming N days (default 7)" })
+
+        vim.api.nvim_create_user_command("Context", function()
+            if Context.is_open() then Context.close() else Context.open() end
+        end, { desc = "Toggle the context sidebar" })
     end,
     opts = {
         workspaces = {
@@ -206,5 +335,24 @@ return {
                 end, { buffer = args.buf, silent = true, desc = "Obsidian: prev link" })
             end,
         })
+
+        -- Context sidebar: refresh per file (debounced/async; zero idle cost when
+        -- closed) and auto-open on the FIRST vault note — so the vimo workspace
+        -- gets it automatically while non-vault (code) sessions stay untouched.
+        -- The flag means a manual close stays closed (reopen with :Context).
+        local ctx_auto_opened = false
+        local function context_tick()
+            if Context.is_open() then
+                Context.schedule_refresh()
+            elseif not ctx_auto_opened and Context.is_vault_md(vim.api.nvim_get_current_buf()) then
+                ctx_auto_opened = true
+                Context.open()
+            end
+        end
+        vim.api.nvim_create_autocmd({ "BufWinEnter", "BufEnter" }, {
+            group = group,
+            callback = context_tick,
+        })
+        vim.schedule(context_tick) -- catch the buffer that triggered plugin load
     end,
 }
