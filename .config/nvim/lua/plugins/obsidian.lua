@@ -35,6 +35,64 @@ local function load_agenda_qf(title, extra)
     vim.cmd("copen")
 end
 
+-- Periodic notes (day→week→month→quarter→year). ALL date math + scaffolding lives
+-- in bin/journal (one source of truth); these just shell out. `ensure` creates a
+-- note from its skeleton if absent and re-stamps the nav/calendar blocks; `locate`
+-- prints a neighbour's path. Dailies are NOT scaffolded here — they stay on
+-- obsidian.nvim's :Today template (one daily code path, no accidental day files).
+local journal = vault .. "/bin/journal"
+local PERIOD_OF_DIR = { Weekly = "week", Monthly = "month", Quarterly = "quarter", Yearly = "year" }
+local KIND_OF_DIR   = { Daily = "day", Weekly = "week", Monthly = "month", Quarterly = "quarter", Yearly = "year" }
+
+local function journal_run(args)
+    local cmd = { journal }
+    vim.list_extend(cmd, args)
+    local out = vim.fn.systemlist(cmd)
+    if vim.v.shell_error ~= 0 then
+        vim.notify("journal: " .. table.concat(out, "\n"), vim.log.levels.ERROR)
+        return nil
+    end
+    return out[#out] -- last stdout line is the absolute path (ensure/locate)
+end
+
+local function open_period(period, date)
+    local args = { "ensure", "--root", vault, "--period", period }
+    if date and date ~= "" then vim.list_extend(args, { "--date", date }) end
+    local path = journal_run(args)
+    if path and path ~= "" then vim.cmd("edit " .. vim.fn.fnameescape(path)) end
+end
+
+-- Scaffold a MISSING period note (week/month/quarter/year) on open, else return the
+-- path unchanged (existing notes, dailies, and non-period notes pass straight through).
+local function ensure_path(path)
+    if vim.fn.filereadable(path) == 1 then return path end
+    local period = PERIOD_OF_DIR[path:match("/Journal/(%w+)/") or ""]
+    if not period then return path end
+    local p = journal_run({ "ensure", "--root", vault, "--period", period, "--id", vim.fn.fnamemodify(path, ":t:r") })
+    return (p and p ~= "") and p or path
+end
+
+-- Zoom from the period note you're in: rel = up (parent) | prev | next (sibling).
+local function zoom(rel)
+    local dir, stem = vim.api.nvim_buf_get_name(0):match("/Journal/(%w+)/(.+)%.md$")
+    local kind = dir and KIND_OF_DIR[dir]
+    if not kind then
+        vim.notify("Not a journal period note", vim.log.levels.INFO); return
+    end
+    local out = vim.fn.systemlist({ journal, "locate", "--root", vault, "--period", kind, "--id", stem, "--rel", rel })
+    if vim.v.shell_error ~= 0 then
+        vim.notify("journal: " .. table.concat(out, "\n"), vim.log.levels.WARN); return
+    end
+    local path = out[1]
+    if not path or path == "" then
+        vim.notify("No " .. rel .. " period from " .. stem, vim.log.levels.INFO); return -- e.g. year has no parent
+    end
+    if path:match("/Journal/Daily/") and vim.fn.filereadable(path) == 0 then
+        vim.notify("No daily " .. vim.fn.fnamemodify(path, ":t:r") .. " yet (use :Today)", vim.log.levels.INFO); return
+    end
+    vim.cmd("edit " .. vim.fn.fnameescape(ensure_path(path)))
+end
+
 -- Context sidebar — a vertical split showing, for the file you're editing: the
 -- 30-day task agenda + recently created/modified (global) + shared-tags +
 -- backlinks, as [[wikilinks]]. Event-driven (debounced BufWinEnter) and async
@@ -124,7 +182,10 @@ local function context_open_under_cursor()
         end
     end
     if target then vim.fn.win_gotoid(target) end
-    vim.cmd("edit " .. vim.fn.fnameescape(entry.path))
+    -- gf a not-yet-created week/month/quarter/year (e.g. from the Calendar section) →
+    -- scaffold it from its skeleton instead of opening a blank buffer. ensure_path is
+    -- a no-op for existing notes, dailies, and non-period notes.
+    vim.cmd("edit " .. vim.fn.fnameescape(ensure_path(entry.path)))
     if entry.lnum and entry.lnum > 1 then -- tasks jump to their exact line
         pcall(vim.api.nvim_win_set_cursor, 0, { entry.lnum, 0 })
     end
@@ -228,6 +289,18 @@ return {
             local n = (o.args ~= "" and o.args) or "7"
             load_agenda_qf("Next " .. n .. " days", { "--bucket", "week", "--days", n })
         end, { nargs = "?", desc = "Planner: upcoming N days (default 7)" })
+
+        -- Periodic NOTE navigation (adjective commands; the noun :Week stays the agenda
+        -- view above). :Daily keeps obsidian.nvim's template; the rest call bin/journal.
+        vim.api.nvim_create_user_command("Daily", function()
+            vim.cmd("Obsidian today")
+        end, { desc = "Journal: open today's daily note" })
+        for _, spec in ipairs({ { "Weekly", "week" }, { "Monthly", "month" },
+                                { "Quarterly", "quarter" }, { "Yearly", "year" } }) do
+            vim.api.nvim_create_user_command(spec[1], function(o)
+                open_period(spec[2], o.args)
+            end, { nargs = "?", desc = "Journal: open/create the " .. spec[2] .. " note (default today; arg: YYYY-MM-DD)" })
+        end
 
         vim.api.nvim_create_user_command("Context", function()
             if Context.is_open() then Context.close() else Context.open() end
@@ -372,6 +445,28 @@ return {
         -- (same idiom as <leader>e → :NvimTreeToggle). <leader> is the default `\`.
         vim.keymap.set("n", "<leader>tc", "<cmd>Context<CR>",
             { silent = true, desc = "Toggle the context sidebar" })
+
+        -- Journal navigation under <leader>j (safe everywhere): open this day/week/
+        -- month/quarter/year, or zoom out/sideways from the period note you're in.
+        for key, cmd in pairs({ jd = "Daily", jw = "Weekly", jm = "Monthly", jq = "Quarterly", jy = "Yearly" }) do
+            vim.keymap.set("n", "<leader>" .. key, "<cmd>" .. cmd .. "<CR>",
+                { silent = true, desc = "Journal: open " .. cmd:lower() })
+        end
+        vim.keymap.set("n", "<leader>ju", function() zoom("up") end,   { silent = true, desc = "Journal: zoom out (parent period)" })
+        vim.keymap.set("n", "<leader>j]", function() zoom("next") end, { silent = true, desc = "Journal: next sibling period" })
+        vim.keymap.set("n", "<leader>j[", function() zoom("prev") end, { silent = true, desc = "Journal: prev sibling period" })
+
+        -- The bracket pairs ALSO zoom, but ONLY inside Journal/ period notes, so they
+        -- don't shadow Vim's ]p/]P/[P (paste-with-reindent) anywhere else. [p is left alone.
+        vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
+            group = group,
+            pattern = vault .. "/Journal/*/*.md",
+            callback = function(a)
+                vim.keymap.set("n", "]p", function() zoom("up") end,   { buffer = a.buf, silent = true, desc = "Journal: zoom out (parent period)" })
+                vim.keymap.set("n", "]P", function() zoom("next") end, { buffer = a.buf, silent = true, desc = "Journal: next sibling period" })
+                vim.keymap.set("n", "[P", function() zoom("prev") end, { buffer = a.buf, silent = true, desc = "Journal: prev sibling period" })
+            end,
+        })
 
         vim.schedule(context_tick) -- catch the buffer that triggered plugin load
     end,
