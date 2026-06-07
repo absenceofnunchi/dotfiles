@@ -14,9 +14,9 @@ local function grep_to_qf(pattern, title)
 end
 
 -- Planner agenda — same ripgrep→quickfix idiom as :Created/:Tag, but for tasks.
--- All date logic lives in _PlannerSandbox/bin/agenda (one source of truth); this just
+-- All date logic lives in bin/agenda (one source of truth); this just
 -- loads its --format=quickfix output, scanning the WHOLE vault (--root vault).
-local agenda = vault .. "/_PlannerSandbox/bin/agenda"
+local agenda = vault .. "/bin/agenda"
 
 local function load_agenda_qf(title, extra)
     local cmd = { agenda, "--format", "quickfix", "--root", vault }
@@ -39,11 +39,11 @@ end
 -- 30-day task agenda + recently created/modified (global) + shared-tags +
 -- backlinks, as [[wikilinks]]. Event-driven (debounced BufWinEnter) and async
 -- (vim.system) — zero idle cost, never blocks typing. Data comes from
--- _PlannerSandbox/bin/context (one source of truth); gf/<CR> on a bullet open
+-- bin/context (one source of truth); gf/<CR> on a bullet open
 -- the target in the MAIN editor window (tasks jump to their exact line) via a
 -- line→path map the script emits, so same-basename notes resolve deterministically.
-local context_script  = vault .. "/_PlannerSandbox/bin/context"
-local context_sidebar = vault .. "/_PlannerSandbox/.context-sidebar.md" -- real, gitignored
+local context_script  = vault .. "/bin/context"
+local context_sidebar = vault .. "/bin/.context-sidebar.md" -- real, gitignored
 local CTX_WIDTH, CTX_DEBOUNCE = 42, 200
 
 local Context = { buf = nil, win = nil, main_win = nil, timer = nil, path_map = {} }
@@ -353,6 +353,26 @@ return {
             group = group,
             callback = context_tick,
         })
+
+        -- Keep the sidebar at its fixed width across terminal/tmux geometry changes.
+        -- winfixwidth resists INTERNAL nvim resizes, but when a tmux pane (e.g. the
+        -- <prefix> C Claude split, which shrinks nvim by 40 cols) opens/closes the whole
+        -- nvim process resizes — the sidebar can be squeezed below CTX_WIDTH and is not
+        -- restored on grow-back. Re-assert the width on every resize while it's open.
+        vim.api.nvim_create_autocmd("VimResized", {
+            group = group,
+            callback = function()
+                if Context.is_open() then
+                    pcall(vim.api.nvim_win_set_width, Context.win, CTX_WIDTH)
+                end
+            end,
+        })
+
+        -- Toggle the sidebar. The :Context command already toggles; bind a key to it
+        -- (same idiom as <leader>e → :NvimTreeToggle). <leader> is the default `\`.
+        vim.keymap.set("n", "<leader>tc", "<cmd>Context<CR>",
+            { silent = true, desc = "Toggle the context sidebar" })
+
         vim.schedule(context_tick) -- catch the buffer that triggered plugin load
     end,
 }
