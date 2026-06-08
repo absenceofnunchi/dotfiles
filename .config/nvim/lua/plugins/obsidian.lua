@@ -122,7 +122,7 @@ local context_script  = vault .. "/bin/context"
 local context_sidebar = vault .. "/bin/.context-sidebar.md" -- real, gitignored
 local CTX_WIDTH, CTX_DEBOUNCE = 42, 200
 
-local Context = { buf = nil, win = nil, main_win = nil, timer = nil, path_map = {} }
+local Context = { buf = nil, win = nil, main_win = nil, timer = nil, path_map = {}, zoomed = false, zoom_return = nil }
 
 function Context.is_vault_md(buf)
     local name = vim.api.nvim_buf_get_name(buf)
@@ -134,6 +134,43 @@ end
 
 function Context.is_open()
     return Context.win ~= nil and vim.api.nvim_win_is_valid(Context.win)
+end
+
+-- Zoom: toggle the sidebar between its compass width (CTX_WIDTH) and full screen,
+-- so a long context list reads like a normal buffer. Native API only
+-- (nvim_win_set_width). winfixwidth is dropped while zoomed so the layout can hand
+-- the sidebar the whole width, and restored on the way back.
+function Context.apply_width()
+    if Context.is_open() then
+        pcall(vim.api.nvim_win_set_width, Context.win,
+            Context.zoomed and vim.o.columns or CTX_WIDTH)
+    end
+end
+
+function Context.toggle_zoom()
+    if not Context.is_open() then Context.open() end -- one key: open + zoom when closed
+    if not Context.is_open() then return end
+    Context.zoomed = not Context.zoomed
+    vim.wo[Context.win].winfixwidth = not Context.zoomed
+    if Context.zoomed then
+        local cur = vim.api.nvim_get_current_win()
+        Context.zoom_return = (cur ~= Context.win) and cur or nil
+        vim.api.nvim_set_current_win(Context.win) -- focus it so you can scroll/read
+    else
+        if Context.zoom_return and vim.api.nvim_win_is_valid(Context.zoom_return) then
+            vim.api.nvim_set_current_win(Context.zoom_return) -- hand focus back
+        end
+        Context.zoom_return = nil
+    end
+    Context.apply_width()
+end
+
+-- Collapse to the compass WITHOUT moving focus — the caller is mid-jump to a note.
+function Context.unzoom()
+    if not Context.zoomed then return end
+    Context.zoomed, Context.zoom_return = false, nil
+    if Context.is_open() then vim.wo[Context.win].winfixwidth = true end
+    Context.apply_width()
 end
 
 -- split the script's %%context-map block into Context.path_map; show the rest.
@@ -197,6 +234,7 @@ local function context_open_under_cursor()
     -- ensure_path is a no-op for existing notes, dailies, and non-period notes.
     local dest = ensure_path(entry.path)
     if not dest then return end
+    Context.unzoom() -- give the main window its space back before we jump there
     local target = Context.main_win
     if not (target and vim.api.nvim_win_is_valid(target)) or target == Context.win then
         target = nil
@@ -230,6 +268,7 @@ function Context.open()
     vim.keymap.set("n", "gf", context_open_under_cursor, { buffer = Context.buf, silent = true, desc = "Context: open in main window" })
     vim.keymap.set("n", "<CR>", context_open_under_cursor, { buffer = Context.buf, silent = true, desc = "Context: open in main window" })
     vim.keymap.set("n", "q", function() Context.close() end, { buffer = Context.buf, silent = true, desc = "Context: close sidebar" })
+    vim.keymap.set("n", "<Tab>", Context.toggle_zoom, { buffer = Context.buf, silent = true, desc = "Context: toggle full-screen zoom" })
     if vim.api.nvim_win_is_valid(origin) then
         vim.api.nvim_set_current_win(origin) -- restore focus; don't steal it
     end
@@ -239,6 +278,7 @@ end
 function Context.close()
     if Context.is_open() then vim.api.nvim_win_close(Context.win, true) end
     Context.win, Context.buf = nil, nil
+    Context.zoomed, Context.zoom_return = false, nil
 end
 
 return {
@@ -447,24 +487,27 @@ return {
             callback = context_tick,
         })
 
-        -- Keep the sidebar at its fixed width across terminal/tmux geometry changes.
+        -- Keep the sidebar at its intended width across terminal/tmux geometry changes.
         -- winfixwidth resists INTERNAL nvim resizes, but when a tmux pane (e.g. the
         -- <prefix> C Claude split, which shrinks nvim by 40 cols) opens/closes the whole
         -- nvim process resizes — the sidebar can be squeezed below CTX_WIDTH and is not
-        -- restored on grow-back. Re-assert the width on every resize while it's open.
+        -- restored on grow-back. Re-assert the width on every resize while it's open
+        -- (CTX_WIDTH normally, or the full screen while zoomed).
         vim.api.nvim_create_autocmd("VimResized", {
             group = group,
-            callback = function()
-                if Context.is_open() then
-                    pcall(vim.api.nvim_win_set_width, Context.win, CTX_WIDTH)
-                end
-            end,
+            callback = function() Context.apply_width() end,
         })
 
         -- Toggle the sidebar. The :Context command already toggles; bind a key to it
         -- (same idiom as <leader>e → :NvimTreeToggle). <leader> is the default `\`.
         vim.keymap.set("n", "<leader>tc", "<cmd>Context<CR>",
             { silent = true, desc = "Toggle the context sidebar" })
+
+        -- Toggle the sidebar between compass width and full screen. Works from
+        -- anywhere (opens + focuses + zooms when closed); <Tab> does the same inside
+        -- the sidebar. Native: nvim_win_set_width to vim.o.columns and back.
+        vim.keymap.set("n", "<leader>tz", Context.toggle_zoom,
+            { silent = true, desc = "Toggle context sidebar full-screen zoom" })
 
         -- Journal navigation under <leader>j (safe everywhere): open this day/week/
         -- month/quarter/year, or zoom out/sideways from the period note you're in.
