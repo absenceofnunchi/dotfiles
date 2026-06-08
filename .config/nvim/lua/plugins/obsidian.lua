@@ -111,8 +111,9 @@ local function zoom(rel)
 end
 
 -- Context sidebar — a vertical split showing, for the file you're editing: the
--- 30-day task agenda + recently created/modified (global) + shared-tags +
--- backlinks, as [[wikilinks]]. Event-driven (debounced BufWinEnter) and async
+-- period Calendar + 1-year task agenda + the [project:: ] registry + recently
+-- created/modified (global) + shared-tags + backlinks, as [[wikilinks]].
+-- Event-driven (debounced BufWinEnter) and async
 -- (vim.system) — zero idle cost, never blocks typing. Data comes from
 -- bin/context (one source of truth); gf/<CR> on a bullet open
 -- the target in the MAIN editor window (tasks jump to their exact line) via a
