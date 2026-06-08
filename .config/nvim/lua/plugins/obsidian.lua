@@ -88,6 +88,44 @@ local function ensure_path(path)
     return (p and p ~= "") and p or path
 end
 
+-- gf/<CR> on a [[wikilink]] must never let obsidian BIRTH a period note: obsidian's
+-- new-note path writes a blank id/aliases/tags stub, but a week/month/quarter/year note
+-- needs the date-math scaffolding (nav, calendar, weeks/days) that only bin/journal does.
+-- Return the absolute path of the period note the cursor's wikilink targets, else nil.
+-- Matches only PATH-QUALIFIED wiki targets (Journal/<Period>/<id>) — exactly what
+-- bin/journal emits — so a bare [[2026-07]] or any non-period link falls through to obsidian.
+local function period_link_under_cursor()
+    local line = vim.api.nvim_get_current_line()
+    local col  = vim.api.nvim_win_get_cursor(0)[2] + 1 -- 1-based byte column
+    local from = 1
+    while true do
+        local s, e, inner = line:find("%[%[(.-)%]%]", from)
+        if not s then return nil end
+        if col >= s and col <= e then -- cursor is inside THIS wikilink
+            -- strip the table-escaped pipe (\|), then drop |alias / #anchor
+            local target = inner:gsub("\\|", "|"):match("^%s*([^|#]+)")
+            target = target and vim.trim(target)
+            local dir = target and target:match("^Journal/(%w+)/")
+            if dir and PERIOD_OF_DIR[dir] then
+                if not target:match("%.md$") then target = target .. ".md" end
+                return vault .. "/" .. target
+            end
+            return nil -- a (non-period) link under the cursor → let obsidian resolve it
+        end
+        from = e + 1
+    end
+end
+
+-- Scaffold a MISSING period note from its skeleton (prompts first via ensure_path),
+-- then open it. Deferred with vim.schedule so it is safe to call from the <CR> `expr`
+-- mapping too (confirm()/:edit are forbidden during expr evaluation / textlock).
+local function scaffold_and_open(path)
+    vim.schedule(function()
+        local dest = ensure_path(path) -- ask Yes/No, then bin/journal ensure
+        if dest then vim.cmd("edit " .. vim.fn.fnameescape(dest)) end
+    end)
+end
+
 -- Zoom from the period note you're in: rel = up (parent) | prev | next (sibling).
 local function zoom(rel)
     local dir, stem = vim.api.nvim_buf_get_name(0):match("/Journal/(%w+)/(.+)%.md$")
@@ -293,6 +331,13 @@ return {
     cmd = { "Obsidian", "Temp", "Today" },
     dependencies = { "nvim-lua/plenary.nvim" },
     init = function()
+        -- Own gf/<CR>/]o/[o ourselves. obsidian re-binds <CR>/]o/[o on EVERY BufEnter
+        -- (in its bufenter_callback, guarded by this global), which would shadow our
+        -- gated <CR> below on every re-entry. We already re-implement all three maps,
+        -- so disabling obsidian's defaults loses nothing and ends the ordering war
+        -- (also stops it clobbering the context sidebar's own <CR> on re-entry).
+        vim.g.obsidian_default_keymap = false
+
         -- Native LSP completion for obsidian's in-process `obsidian-ls` server.
         -- Registered in init() (startup, pre-load) so it exists before obsidian-ls
         -- attaches to the first vault buffer. Trigger chars are hacked to every ASCII
@@ -448,12 +493,29 @@ return {
             pattern = vault .. "/**/*.md",
             group = group,
             callback = function(args)
-                vim.keymap.set("n", "gf", "<cmd>Obsidian follow_link<CR>", {
+                -- gf: a missing period link is scaffolded via bin/journal; everything
+                -- else (existing notes, dailies, non-period links) → obsidian follows.
+                vim.keymap.set("n", "gf", function()
+                    local path = period_link_under_cursor()
+                    if path and vim.fn.filereadable(path) == 0 then
+                        scaffold_and_open(path)
+                    else
+                        vim.cmd("Obsidian follow_link")
+                    end
+                end, {
                     buffer = args.buf,
                     silent = true,
-                    desc = "Obsidian: follow link",
+                    desc = "Obsidian: follow link (period notes via bin/journal)",
                 })
+                -- <CR>: same gate first, then obsidian's smart action (which handles
+                -- existing links, checkboxes, tags, folds). Stays an `expr` mapping;
+                -- the scaffold side-effects are deferred by scaffold_and_open.
                 vim.keymap.set("n", "<CR>", function()
+                    local path = period_link_under_cursor()
+                    if path and vim.fn.filereadable(path) == 0 then
+                        scaffold_and_open(path)
+                        return "" -- handled here; feed no keys
+                    end
                     return require("obsidian.api").smart_action()
                 end, {
                     buffer = args.buf,
