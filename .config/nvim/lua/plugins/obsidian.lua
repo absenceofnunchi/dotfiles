@@ -251,7 +251,10 @@ function Context.schedule_refresh()
     if cur == Context.buf or not Context.is_vault_md(cur) then return end
     Context.main_win = vim.api.nvim_get_current_win() -- where gf should land
     local file = vim.api.nvim_buf_get_name(cur)
-    if Context.timer then Context.timer:stop() end
+    if Context.timer then
+        Context.timer:stop()
+        Context.timer:close() -- replaced before firing: close too, or the handle leaks
+    end
     Context.timer = vim.uv.new_timer()
     Context.timer:start(CTX_DEBOUNCE, 0, function()
         Context.timer:stop()
