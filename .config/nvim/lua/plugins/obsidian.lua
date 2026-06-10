@@ -316,8 +316,30 @@ function Context.open()
     Context.schedule_refresh()
 end
 
+-- Close the sidebar. When it is the LAST window (the note window was :q'd or
+-- <C-w>o'd away, so the sidebar fills the screen), nvim_win_close throws E444 —
+-- and the toggle could never recover, erroring on every press. Recycle the
+-- window into a normal one showing the most recent listed buffer instead.
 function Context.close()
-    if Context.is_open() then vim.api.nvim_win_close(Context.win, true) end
+    if Context.is_open() and not pcall(vim.api.nvim_win_close, Context.win, true) then
+        vim.api.nvim_set_current_win(Context.win)
+        local mru
+        for _, b in ipairs(vim.fn.getbufinfo({ buflisted = 1 })) do
+            if not mru or b.lastused > mru.lastused then mru = b end
+        end
+        if mru then
+            vim.api.nvim_set_current_buf(mru.bufnr)
+        else
+            vim.cmd("enew")
+        end
+        -- un-sidebar the surviving window: open() set these window-locally, and
+        -- a buffer never shown elsewhere would inherit them
+        vim.wo.winfixwidth = false
+        vim.wo.number = vim.o.number
+        vim.wo.relativenumber = vim.o.relativenumber
+        vim.wo.wrap = vim.o.wrap
+        vim.wo.concealcursor = vim.o.concealcursor
+    end
     Context.win, Context.buf = nil, nil
     Context.zoomed, Context.zoom_return = false, nil
 end
