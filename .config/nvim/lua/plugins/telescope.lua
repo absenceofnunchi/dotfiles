@@ -87,7 +87,8 @@ return {
                 preview = { hide_on_startup = false, treesitter = false },
             },
             pickers = {
-                find_files = { hidden = true, no_ignore = true },
+                -- prune node_modules/.git during the walk; file_ignore_patterns only filters post-walk (too slow at 100k+ files)
+                find_files = { find_command = { "rg", "--files", "--color", "never", "--hidden", "--no-ignore", "-g", "!.git", "-g", "!node_modules" } },
                 git_files = { show_untracked = true },
             },
         }
