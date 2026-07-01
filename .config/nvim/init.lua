@@ -36,6 +36,7 @@ require("lazy").setup({
 })
 
 require("autocmds")
+require("prose-wrap")
 
 for _, server in ipairs({
     "pyright", "clangd", "sourcekit", "typescript", "go",
