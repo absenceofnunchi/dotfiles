@@ -8,7 +8,7 @@
 -- uncertain case (no parser, odd node, blank line) resolves to no-wrap, never to a
 -- wrong break. A missed wrap costs you a `gqq`; a wrong wrap breaks a table.
 
-local WIDTH = 200
+local WIDTH = 80
 
 -- Outermost-block types that must never auto-wrap. The top-level check below is the
 -- real guarantee; this set is just an explicit early-out for nested cases (a task's
