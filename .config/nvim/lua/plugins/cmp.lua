@@ -70,9 +70,16 @@ return {
                     luasnip.lsp_expand(args.body)
                 end,
             },
+            -- Cap both floats. cmp's defaults size the documentation window
+            -- from WIDE_HEIGHT (config/default.lua) — ~35 rows x ~101 cols on a
+            -- 45x180 terminal — and grow the menu upward without limit, so with
+            -- the cursor low in the viewport the box clamps to screen row 0 and
+            -- flashes at the top of the screen on every keystroke. It reads as
+            -- *black* because NormalFloat/FloatBorder stay opaque (#1e2031)
+            -- under transparent_background, where Normal is bg=NONE.
             window = {
-                completion = cmp.config.window.bordered(),
-                documentation = cmp.config.window.bordered(),
+                completion = cmp.config.window.bordered({ max_height = 10 }),
+                documentation = cmp.config.window.bordered({ max_width = 60, max_height = 12 }),
             },
             experimental = {
                 ghost_text = true,
