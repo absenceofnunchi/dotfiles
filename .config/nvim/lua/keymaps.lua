@@ -250,3 +250,8 @@ vim.keymap.set("n", "<C-d>", "<C-d>zz", { desc = "Half-page down (centered)" })
 vim.keymap.set("n", "<C-u>", "<C-u>zz", { desc = "Half-page up (centered)" })
 vim.keymap.set("n", "<C-f>", "<C-f>zz", { desc = "Page down (centered)" })
 vim.keymap.set("n", "<C-b>", "<C-b>zz", { desc = "Page up (centered)" })
+
+-- Copy the absolute path of the current file
+vim.keymap.set('n', '<leader>cp', function()
+vim.fn.setreg('+', vim.fn.expand('%:p'))
+end, { desc = 'Copy absolute path' })
