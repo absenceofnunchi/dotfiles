@@ -1,18 +1,24 @@
--- Clipboard: OSC 52 for copy (works locally and over SSH via tmux's `set-clipboard on`),
--- pbpaste for paste. Never OSC 52 paste — it blocks nvim waiting for a terminal response
--- that tmux popups + many terminals never send ("Waiting for OSC 52 response"). To paste
--- the system clipboard into a remote nvim, use Cmd+V in insert mode (bracketed paste
--- from the terminal — no provider needed on the remote side).
+-- Clipboard: pbcopy/pbpaste where they exist (local macOS), OSC 52 copy only as the
+-- remote fallback. OSC 52 is an escape sequence the TERMINAL has to see; inside a tmux
+-- display-popup it never gets there (tmux only handles OSC 52 for real panes, and a
+-- popup is not one), so every yank in a popup silently copied nothing. pbcopy talks to
+-- the pasteboard directly and does not care where it runs.
+-- Never OSC 52 paste — it blocks nvim waiting for a terminal response that tmux popups
+-- + many terminals never send ("Waiting for OSC 52 response"). To paste the system
+-- clipboard into a remote nvim, use Cmd+V in insert mode (bracketed paste from the
+-- terminal — no provider needed on the remote side).
 vim.opt.clipboard = "unnamedplus"
+local has_pb = vim.fn.executable("pbcopy") == 1
+local copy_fn = has_pb and function(lines) vim.fn.system("pbcopy", table.concat(lines, "\n")) end
 local osc52 = require("vim.ui.clipboard.osc52")
 local paste_fn = vim.fn.executable("pbpaste") == 1
     and function() return vim.split(vim.fn.system("pbpaste"), "\n") end
     or function() return vim.split(vim.fn.getreg('"'), "\n") end
 vim.g.clipboard = {
-    name = "osc52-copy + pbpaste",
+    name = has_pb and "pbcopy + pbpaste" or "osc52-copy + paste fallback",
     copy = {
-        ["+"] = osc52.copy("+"),
-        ["*"] = osc52.copy("*"),
+        ["+"] = copy_fn or osc52.copy("+"),
+        ["*"] = copy_fn or osc52.copy("*"),
     },
     paste = {
         ["+"] = paste_fn,
