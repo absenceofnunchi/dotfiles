@@ -60,6 +60,7 @@ return {
                     "bin/",
                     "%.next/",
                     ".venv/",
+                    "__pycache__",
                 },
                 mappings = {
                     i = {
