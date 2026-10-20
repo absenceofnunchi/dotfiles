@@ -59,6 +59,7 @@ return {
                     "out/",
                     "bin/",
                     "%.next/",
+                    ".venv/",
                 },
                 mappings = {
                     i = {
