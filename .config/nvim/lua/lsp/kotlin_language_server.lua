@@ -7,7 +7,7 @@ local markers = {
 }
 
 vim.lsp.config.kotlin_language_server = {
-    cmd = { 'kotlin-lsp', '--stdio' },
+    cmd = { 'kotlin-lsp', '--stdio', '--system-path', vim.fn.stdpath('cache') .. '/kotlin-lsp' },
     filetypes = { 'kotlin' },
     -- Fall back to the file's directory when no project marker is found,
     -- so single-file scratch projects still get an LSP attached.
