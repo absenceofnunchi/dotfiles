@@ -53,6 +53,38 @@ return {
             { "<leader>xB", "<cmd>XcodebuildCleanBuild<cr>", desc = "Xcode clean build" },
             { "<leader>xr", "<cmd>XcodebuildBuildRun<cr>", desc = "Xcode build & run" },
             { "<leader>xR", "<cmd>XcodebuildRun<cr>", desc = "Xcode run (no rebuild)" },
+            {
+                "<leader>xL",
+                function()
+                    -- Like <leader>xr, but launches with `devicectl --console` and saves the app's
+                    -- output to <project>/logs/console-<timestamp>.log. XcodebuildBuildRun launches
+                    -- on a device without --console, so the app's output is lost there.
+                    local settings = require("xcodebuild.project.config").settings
+                    if settings.platform and not require("xcodebuild.core.constants").is_device(settings.platform) then
+                        vim.notify("Build, run & log needs a physical device", vim.log.levels.ERROR)
+                        return
+                    end
+                    local actions = require("xcodebuild.actions")
+                    actions.build(function(report)
+                        if report.buildErrors and next(report.buildErrors) then
+                            return
+                        end
+                        actions.install_app(function()
+                            local dir = (settings.workingDirectory or vim.fn.getcwd()) .. "/logs"
+                            vim.fn.mkdir(dir, "p")
+                            local log = dir .. os.date("/console-%Y%m%d-%H%M%S.log")
+                            vim.cmd("botright 15new")
+                            vim.fn.jobstart({
+                                "sh", "-c",
+                                'echo "log: $3"; xcrun devicectl device process launch --device "$1" --console --terminate-existing "$2" 2>&1 | tee "$3"',
+                                "sh", settings.destination, settings.bundleId, log,
+                            }, { term = true })
+                            vim.cmd("wincmd p")
+                        end)
+                    end)
+                end,
+                desc = "Xcode build, run & log to logs/",
+            },
             { "<leader>xD", "<cmd>XcodebuildCleanDerivedData<cr>", desc = "Deletes project's DerivedData" },
             { "<leader>xt", "<cmd>XcodebuildTest<cr>", desc = "Xcode run all tests" },
             { "<leader>xT", "<cmd>XcodebuildTestClass<cr>", desc = "Xcode run test class" },
